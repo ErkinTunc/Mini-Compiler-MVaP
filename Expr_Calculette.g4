@@ -24,7 +24,7 @@ grammar Expr_Calculette;
         Boolean bvalue;     // sadece bool için kullan
     }
 
-    Map<String, VarEntry> symtab = new HashMap<>(); // systab : sembol tablosu
+    Map<String, VarEntry> symtab = new HashMap<>(); // symtab : symbole table
 }
 
 // ---------------- Parser rules ----------------
@@ -36,8 +36,8 @@ start
     ;
 
 instruction
-    : declInstr                            #declInstruction
-    | assignInstr                          #assignInstruction
+    : declInstr                            // declInstruction
+    | assignInstr                          // assignInstruction
     |  e=expr
       {
         if ($e.isBool)
@@ -45,51 +45,69 @@ instruction
         else
             System.out.println("Afficher : " + $e.ivalue);
       }
-    // İstersen çıplak expr de kabul edebilirsin, ama 3.4'ün ruhu
-    // “sadece Afficher yazdırır” olduğu için bunu eklememek daha temiz.
+    // “sadece Afficher : yazdırır” olduğu için bunu eklememek daha temiz.
     ;
 
-<<<<<<< HEAD
 declInstr
     : t=type ids=idList
       {
-        for (String name : $ids.ids) {
+        for (String name : $ids.value) {
             if (symtab.containsKey(name)) {
                 throw new RuntimeException("Variable already declared: " + name);
             }
 
             VarEntry e = new VarEntry();
-            e.type = $t.getText();   // "int" veya "bool"
+            e.type = $t.value;
             e.initialized = false;
             e.ivalue = null;
             e.bvalue = null;
             
             symtab.put(name, e);
         }
-=======
-declInstr // Declaration instruction
-    : type idList //TODO 
-      { 
-        // semantic: her ID için tabloya (type, initialized=false) ekle
->>>>>>> 584e58f (Updateing)
       }
     ;
 
-type // Data type
-    : TYPE
+type returns [String value]
+    : TYPE { $value = $TYPE.getText(); }
     ;
 
-idList returns [List<String> ids]
+idList returns [List<String> value] // ids = id start
     : id1=ID
       {
-          $ids = new ArrayList<>();
-          $ids.add($id1.getText());
+          $value = new ArrayList<>();
+          $value.add($id1.getText());
       }
-      ( ',' idn=ID { $ids.add($idn.getText()); } )*
+      ( ',' idn=ID { $value.add($idn.getText()); } )*
     ;
 
-assignInstr // Assignment instruction
-    : ID '=' e=expr
+assignInstr
+    : id=ID '=' e=expr
+      {
+        String name = $id.getText();
+        VarEntry v = symtab.get(name);  // v = variable entry
+        if (v == null) {
+            throw new RuntimeException("Undeclared variable: " + name);
+        }
+
+        // Control type compatibility
+        if (v.type.equals("int")) {
+            if ($e.isBool) {
+                throw new RuntimeException("Type error: assigning bool to int variable " + name);
+            }
+            v.ivalue = $e.ivalue;
+            v.bvalue = null;
+        } else if (v.type.equals("bool")) {
+            if (!$e.isBool) {
+                throw new RuntimeException("Type error: assigning int to bool variable " + name);
+            }
+            v.bvalue = $e.bvalue;
+            v.ivalue = null;
+        } else {
+            throw new RuntimeException("Unknown type for variable " + name);
+        }
+
+        v.initialized = true;
+      }
     ;
 
 // Combined expressions
@@ -104,21 +122,21 @@ arithmExpr returns [int value]
                             $value = -$a.value;
                           else
                               $value = +$a.value;
-                        } #unaryMinus
-    | '(' A1=arithmExpr ')'                  { $value = $A1.value;}                #arithParens // parantez değeri yanlızca değeri döndürür
+                        }  // unaryMinus
+    | '(' A1=arithmExpr ')'                  { $value = $A1.value;}                // arithParens // parantez değeri yanlızca değeri döndürür
     | A1=arithmExpr MULDIV A2=arithmExpr     { if ($MULDIV.getText().equals("*")) {
                                                    $value = $A1.value * $A2.value;
                                                 } else {
                                                   $value = $A1.value / $A2.value;
                                                 } 
-                                              }#mulDiv 
+                                              } // mulDiv 
     | A1=arithmExpr ADDSUB A2=arithmExpr     { if ($ADDSUB.getText().equals("+")) {
                                                    $value = $A1.value + $A2.value;
                                                 } else {
                                                   $value = $A1.value - $A2.value;
                                                 } 
-                                              }   #addSub 
-    | ENTIER { $value = Integer.parseInt($ENTIER.getText()); }  #intLiteral
+                                              }   // addSub 
+    | ENTIER { $value = Integer.parseInt($ENTIER.getText()); }  // intLiteral
     ;
 // Boolean expressions "arithm  >  comparaisons >  not >  and  >  or" 
 
@@ -153,8 +171,7 @@ LOGICOP : ('==' | '<>' | '<' | '<=' | '>' | '>='); // $LOGICOP.getText()  | $LOG
 ENTIER : ('0'..'9')+;       // match integers , all sequences of digits
 
 TYPE : 'int' | 'bool' ;    // match types
-ID : ('0'..'9' | 'a'..'z' | 'A'..'Z' | '_')+
-      ;                       // match identifiers
+ID : [a-zA-Z_] [a-zA-Z0-9_]* ;// match identifiers
 
 WS : (' '|'\t')+ -> skip;   // ignore spaces and tabs
 UNMATCH : . -> skip;        // ignore any other character
