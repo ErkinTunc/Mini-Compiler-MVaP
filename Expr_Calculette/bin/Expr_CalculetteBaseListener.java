@@ -42,6 +42,18 @@ public class Expr_CalculetteBaseListener implements Expr_CalculetteListener {
 	 *
 	 * <p>The default implementation does nothing.</p>
 	 */
+	@Override public void enterDeclAssigneInstr(Expr_CalculetteParser.DeclAssigneInstrContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
+	@Override public void exitDeclAssigneInstr(Expr_CalculetteParser.DeclAssigneInstrContext ctx) { }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation does nothing.</p>
+	 */
 	@Override public void enterDeclInstr(Expr_CalculetteParser.DeclInstrContext ctx) { }
 	/**
 	 * {@inheritDoc}

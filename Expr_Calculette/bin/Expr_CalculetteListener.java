@@ -30,6 +30,16 @@ public interface Expr_CalculetteListener extends ParseTreeListener {
 	 */
 	void exitInstruction(Expr_CalculetteParser.InstructionContext ctx);
 	/**
+	 * Enter a parse tree produced by {@link Expr_CalculetteParser#declAssigneInstr}.
+	 * @param ctx the parse tree
+	 */
+	void enterDeclAssigneInstr(Expr_CalculetteParser.DeclAssigneInstrContext ctx);
+	/**
+	 * Exit a parse tree produced by {@link Expr_CalculetteParser#declAssigneInstr}.
+	 * @param ctx the parse tree
+	 */
+	void exitDeclAssigneInstr(Expr_CalculetteParser.DeclAssigneInstrContext ctx);
+	/**
 	 * Enter a parse tree produced by {@link Expr_CalculetteParser#declInstr}.
 	 * @param ctx the parse tree
 	 */

@@ -36,8 +36,9 @@ start
     ;
 
 instruction
-    : declInstr                            // declInstruction
+    : declAssigneInstr                       // declAssignInstruction
     | assignInstr                          // assignInstruction
+    | declInstr                            // declInstruction
     |  e=expr
       {
         if ($e.isBool)
@@ -46,6 +47,10 @@ instruction
             System.out.println("Afficher : " + $e.ivalue);
       }
     // “sadece Afficher : yazdırır” olduğu için bunu eklememek daha temiz.
+    ;
+declAssigneInstr
+    : t='int' id=ID '=' ENTIER
+    | t='bool' id=ID '=' BOOL
     ;
 
 declInstr
@@ -85,6 +90,7 @@ assignInstr
       {
         String name = $id.getText();
         VarEntry v = symtab.get(name);  // v = variable entry
+
         if (v == null) {
             throw new RuntimeException("Undeclared variable: " + name);
         }
@@ -124,12 +130,15 @@ arithmExpr returns [int value]
                               $value = +$a.value;
                         }  // unaryMinus
     | '(' A1=arithmExpr ')'                  { $value = $A1.value;}                // arithParens // parantez değeri yanlızca değeri döndürür
-    | A1=arithmExpr MULDIV A2=arithmExpr     { if ($MULDIV.getText().equals("*")) {
-                                                   $value = $A1.value * $A2.value;
-                                                } else {
-                                                  $value = $A1.value / $A2.value;
-                                                } 
-                                              } // mulDiv 
+    | A1=arithmExpr MULDIV A2=arithmExpr    
+       {
+         if ($MULDIV.getText().equals("*")) 
+         {
+          $value = $A1.value * $A2.value;
+          } else {
+          $value = $A1.value / $A2.value;
+        }
+        } // mulDiv 
     | A1=arithmExpr ADDSUB A2=arithmExpr     { if ($ADDSUB.getText().equals("+")) {
                                                    $value = $A1.value + $A2.value;
                                                 } else {
@@ -199,6 +208,7 @@ ADDSUB : ('+' | '-');      // $ADDSUB.getText()  | $ADDSUB.getType()
 LOGICOP : ('==' | '<>' | '<' | '<=' | '>' | '>='); // $LOGICOP.getText()  | $LOGICOP.getType()
 
 ENTIER : ('0'..'9')+;       // match integers , all sequences of digits
+BOOL : 'true' | 'false' ;
 
 TYPE : 'int' | 'bool' ;    // match types
 ID : [a-zA-Z_] [a-zA-Z0-9_]* ;// match identifiers
