@@ -24,7 +24,7 @@ grammar Expr_Calculette;
         Boolean bvalue;     // sadece bool için kullan
     }
 
-    Map<String, VarEntry> symtab = new HashMap<>();
+    Map<String, VarEntry> symtab = new HashMap<>(); // systab : sembol tablosu
 }
 
 // ---------------- Parser rules ----------------
@@ -49,10 +49,22 @@ instruction
     // “sadece Afficher yazdırır” olduğu için bunu eklememek daha temiz.
     ;
 
-declInstr // Declaration instruction
-    : type idList
+declInstr
+    : t=type ids=idList
       {
-        // semantic: her ID için tabloya (type, initialized=false) ekle
+        for (String name : $ids.ids) {
+            if (symtab.containsKey(name)) {
+                throw new RuntimeException("Variable already declared: " + name);
+            }
+
+            VarEntry e = new VarEntry();
+            e.type = $t.getText();   // "int" veya "bool"
+            e.initialized = false;
+            e.ivalue = null;
+            e.bvalue = null;
+            
+            symtab.put(name, e);
+        }
       }
     ;
 
@@ -60,8 +72,13 @@ type // Data type
     : TYPE
     ;
 
-idList // List of identifiers
-    : ID (',' ID)*
+idList returns [List<String> ids]
+    : id1=ID
+      {
+          $ids = new ArrayList<>();
+          $ids.add($id1.getText());
+      }
+      ( ',' idn=ID { $ids.add($idn.getText()); } )*
     ;
 
 assignInstr // Assignment instruction
