@@ -1,21 +1,53 @@
+// Compilation : antlr4 Variable.g4 -o ./Variable/bin
+// Execution   : javac -d ./Variable/bin/ ./Variable/bin/*.java
+
+// grun Variable start -gui
+
 grammar Variable ;
+@header
+{
+ import java.util.*;
+}
+
+@members
+{
+    static class VarEntry 
+    {
+        String type;        // "int" or "bool"
+        boolean initialized;
+        Integer ivalue;     // sadece int için kullan
+        Boolean bvalue;     // sadece bool için kullan
+    }
+
+    Map<String, VarEntry> symtab = new HashMap<>();
+}
 
 // ---------------- Parser rules ----------------
 start
-    : varaible
-      ( (SEMICOLON | NEWLINE)+ varaible )*
+    : variable
+      ( (SEMICOLON | NEWLINE)+ variable )*
       (SEMICOLON | NEWLINE)*
       EOF
     ;
 
-varaible
-    : type ID SEMICOLON
-    | 'int' ID ASSIGNE ENTIER SEMICOLON
-    | 'bool' ID ASSIGNE BOOL SEMICOLON
-    | ID ASSIGNE SEMICOLON
+variable
+         // { $VariableParser.symtab.put(
+                //                 $id.getText(), 
+                //                 new VarEntry() 
+                //                 {
+                //                     { type = $t.getText(); 
+                //                         initialized = false; 
+                // *                   }
+                //                 }
+                //                     ); 
+                // } 
+    : 'int' ID ASSIGNE ENTIER
+    | 'bool' ID ASSIGNE BOOL
+    | type ID
+    | ID ASSIGNE
     ;
 
-type : 'int' | 'bool' ;
+type : 'int' | 'bool';
 
 // ---------------- Lexer rules ----------------
 NEWLINE : '\r'? '\n';       // match newlines
@@ -33,5 +65,4 @@ BOOL : 'true' | 'false' ;
 WS : (' '|'\t')+ -> skip;   // ignore spaces and tabs
 UNMATCH : . -> skip;        // ignore any other character
 
-ID : ENTIER ID | STRING ID ;
-STRING : ('a' .. 'z')+ STRING | ('A' .. 'Z')+ STRING ;
+ID : [a-zA-Z_] [a-zA-Z0-9_]* ;// match identifiers

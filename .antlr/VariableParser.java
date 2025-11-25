@@ -1,4 +1,7 @@
 // Generated from /home/pc/Documents/Compilation/TP4-COMPILATION/Variable.g4 by ANTLR 4.13.1
+
+ import java.util.*;
+
 import org.antlr.v4.runtime.atn.*;
 import org.antlr.v4.runtime.dfa.DFA;
 import org.antlr.v4.runtime.*;
@@ -17,12 +20,12 @@ public class VariableParser extends Parser {
 		new PredictionContextCache();
 	public static final int
 		T__0=1, T__1=2, NEWLINE=3, SEMICOLON=4, MULDIV=5, ADDSUB=6, LOGICOP=7, 
-		ASSIGNE=8, ENTIER=9, BOOL=10, WS=11, UNMATCH=12, ID=13, STRING=14;
+		ASSIGNE=8, ENTIER=9, BOOL=10, WS=11, UNMATCH=12, ID=13;
 	public static final int
-		RULE_start = 0, RULE_varaible = 1, RULE_type = 2;
+		RULE_start = 0, RULE_variable = 1, RULE_type = 2;
 	private static String[] makeRuleNames() {
 		return new String[] {
-			"start", "varaible", "type"
+			"start", "variable", "type"
 		};
 	}
 	public static final String[] ruleNames = makeRuleNames();
@@ -36,7 +39,7 @@ public class VariableParser extends Parser {
 	private static String[] makeSymbolicNames() {
 		return new String[] {
 			null, null, null, "NEWLINE", "SEMICOLON", "MULDIV", "ADDSUB", "LOGICOP", 
-			"ASSIGNE", "ENTIER", "BOOL", "WS", "UNMATCH", "ID", "STRING"
+			"ASSIGNE", "ENTIER", "BOOL", "WS", "UNMATCH", "ID"
 		};
 	}
 	private static final String[] _SYMBOLIC_NAMES = makeSymbolicNames();
@@ -85,6 +88,17 @@ public class VariableParser extends Parser {
 	@Override
 	public ATN getATN() { return _ATN; }
 
+
+	    static class VarEntry 
+	    {
+	        String type;        // "int" or "bool"
+	        boolean initialized;
+	        Integer ivalue;     // sadece int için kullan
+	        Boolean bvalue;     // sadece bool için kullan
+	    }
+
+	    Map<String, VarEntry> symtab = new HashMap<>();
+
 	public VariableParser(TokenStream input) {
 		super(input);
 		_interp = new ParserATNSimulator(this,_ATN,_decisionToDFA,_sharedContextCache);
@@ -92,11 +106,11 @@ public class VariableParser extends Parser {
 
 	@SuppressWarnings("CheckReturnValue")
 	public static class StartContext extends ParserRuleContext {
-		public List<VaraibleContext> varaible() {
-			return getRuleContexts(VaraibleContext.class);
+		public List<VariableContext> variable() {
+			return getRuleContexts(VariableContext.class);
 		}
-		public VaraibleContext varaible(int i) {
-			return getRuleContext(VaraibleContext.class,i);
+		public VariableContext variable(int i) {
+			return getRuleContext(VariableContext.class,i);
 		}
 		public TerminalNode EOF() { return getToken(VariableParser.EOF, 0); }
 		public List<TerminalNode> SEMICOLON() { return getTokens(VariableParser.SEMICOLON); }
@@ -122,7 +136,7 @@ public class VariableParser extends Parser {
 			enterOuterAlt(_localctx, 1);
 			{
 			setState(6);
-			varaible();
+			variable();
 			setState(15);
 			_errHandler.sync(this);
 			_alt = getInterpreter().adaptivePredict(_input,1,_ctx);
@@ -153,7 +167,7 @@ public class VariableParser extends Parser {
 						_la = _input.LA(1);
 					} while ( _la==NEWLINE || _la==SEMICOLON );
 					setState(12);
-					varaible();
+					variable();
 					}
 					} 
 				}
@@ -199,78 +213,69 @@ public class VariableParser extends Parser {
 	}
 
 	@SuppressWarnings("CheckReturnValue")
-	public static class VaraibleContext extends ParserRuleContext {
-		public TypeContext type() {
-			return getRuleContext(TypeContext.class,0);
-		}
+	public static class VariableContext extends ParserRuleContext {
 		public TerminalNode ID() { return getToken(VariableParser.ID, 0); }
-		public TerminalNode SEMICOLON() { return getToken(VariableParser.SEMICOLON, 0); }
 		public TerminalNode ASSIGNE() { return getToken(VariableParser.ASSIGNE, 0); }
 		public TerminalNode ENTIER() { return getToken(VariableParser.ENTIER, 0); }
 		public TerminalNode BOOL() { return getToken(VariableParser.BOOL, 0); }
-		public VaraibleContext(ParserRuleContext parent, int invokingState) {
+		public TypeContext type() {
+			return getRuleContext(TypeContext.class,0);
+		}
+		public VariableContext(ParserRuleContext parent, int invokingState) {
 			super(parent, invokingState);
 		}
-		@Override public int getRuleIndex() { return RULE_varaible; }
+		@Override public int getRuleIndex() { return RULE_variable; }
 	}
 
-	public final VaraibleContext varaible() throws RecognitionException {
-		VaraibleContext _localctx = new VaraibleContext(_ctx, getState());
-		enterRule(_localctx, 2, RULE_varaible);
+	public final VariableContext variable() throws RecognitionException {
+		VariableContext _localctx = new VariableContext(_ctx, getState());
+		enterRule(_localctx, 2, RULE_variable);
 		try {
-			setState(43);
+			setState(39);
 			_errHandler.sync(this);
 			switch ( getInterpreter().adaptivePredict(_input,3,_ctx) ) {
 			case 1:
 				enterOuterAlt(_localctx, 1);
 				{
 				setState(26);
-				type();
+				match(T__0);
 				setState(27);
 				match(ID);
 				setState(28);
-				match(SEMICOLON);
+				match(ASSIGNE);
+				setState(29);
+				match(ENTIER);
 				}
 				break;
 			case 2:
 				enterOuterAlt(_localctx, 2);
 				{
 				setState(30);
-				match(T__0);
+				match(T__1);
 				setState(31);
 				match(ID);
 				setState(32);
 				match(ASSIGNE);
 				setState(33);
-				match(ENTIER);
-				setState(34);
-				match(SEMICOLON);
+				match(BOOL);
 				}
 				break;
 			case 3:
 				enterOuterAlt(_localctx, 3);
 				{
+				setState(34);
+				type();
 				setState(35);
-				match(T__1);
-				setState(36);
 				match(ID);
-				setState(37);
-				match(ASSIGNE);
-				setState(38);
-				match(BOOL);
-				setState(39);
-				match(SEMICOLON);
 				}
 				break;
 			case 4:
 				enterOuterAlt(_localctx, 4);
 				{
-				setState(40);
+				setState(37);
 				match(ID);
-				setState(41);
+				setState(38);
 				match(ASSIGNE);
-				setState(42);
-				match(SEMICOLON);
 				}
 				break;
 			}
@@ -301,7 +306,7 @@ public class VariableParser extends Parser {
 		try {
 			enterOuterAlt(_localctx, 1);
 			{
-			setState(45);
+			setState(41);
 			_la = _input.LA(1);
 			if ( !(_la==T__0 || _la==T__1) ) {
 			_errHandler.recoverInline(this);
@@ -325,38 +330,36 @@ public class VariableParser extends Parser {
 	}
 
 	public static final String _serializedATN =
-		"\u0004\u0001\u000e0\u0002\u0000\u0007\u0000\u0002\u0001\u0007\u0001\u0002"+
+		"\u0004\u0001\r,\u0002\u0000\u0007\u0000\u0002\u0001\u0007\u0001\u0002"+
 		"\u0002\u0007\u0002\u0001\u0000\u0001\u0000\u0004\u0000\t\b\u0000\u000b"+
 		"\u0000\f\u0000\n\u0001\u0000\u0005\u0000\u000e\b\u0000\n\u0000\f\u0000"+
 		"\u0011\t\u0000\u0001\u0000\u0005\u0000\u0014\b\u0000\n\u0000\f\u0000\u0017"+
 		"\t\u0000\u0001\u0000\u0001\u0000\u0001\u0001\u0001\u0001\u0001\u0001\u0001"+
 		"\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001"+
-		"\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0001"+
-		"\u0001\u0001\u0001\u0003\u0001,\b\u0001\u0001\u0002\u0001\u0002\u0001"+
-		"\u0002\u0000\u0000\u0003\u0000\u0002\u0004\u0000\u0002\u0001\u0000\u0003"+
-		"\u0004\u0001\u0000\u0001\u00022\u0000\u0006\u0001\u0000\u0000\u0000\u0002"+
-		"+\u0001\u0000\u0000\u0000\u0004-\u0001\u0000\u0000\u0000\u0006\u000f\u0003"+
-		"\u0002\u0001\u0000\u0007\t\u0007\u0000\u0000\u0000\b\u0007\u0001\u0000"+
-		"\u0000\u0000\t\n\u0001\u0000\u0000\u0000\n\b\u0001\u0000\u0000\u0000\n"+
-		"\u000b\u0001\u0000\u0000\u0000\u000b\f\u0001\u0000\u0000\u0000\f\u000e"+
-		"\u0003\u0002\u0001\u0000\r\b\u0001\u0000\u0000\u0000\u000e\u0011\u0001"+
-		"\u0000\u0000\u0000\u000f\r\u0001\u0000\u0000\u0000\u000f\u0010\u0001\u0000"+
-		"\u0000\u0000\u0010\u0015\u0001\u0000\u0000\u0000\u0011\u000f\u0001\u0000"+
-		"\u0000\u0000\u0012\u0014\u0007\u0000\u0000\u0000\u0013\u0012\u0001\u0000"+
-		"\u0000\u0000\u0014\u0017\u0001\u0000\u0000\u0000\u0015\u0013\u0001\u0000"+
-		"\u0000\u0000\u0015\u0016\u0001\u0000\u0000\u0000\u0016\u0018\u0001\u0000"+
-		"\u0000\u0000\u0017\u0015\u0001\u0000\u0000\u0000\u0018\u0019\u0005\u0000"+
-		"\u0000\u0001\u0019\u0001\u0001\u0000\u0000\u0000\u001a\u001b\u0003\u0004"+
-		"\u0002\u0000\u001b\u001c\u0005\r\u0000\u0000\u001c\u001d\u0005\u0004\u0000"+
-		"\u0000\u001d,\u0001\u0000\u0000\u0000\u001e\u001f\u0005\u0001\u0000\u0000"+
-		"\u001f \u0005\r\u0000\u0000 !\u0005\b\u0000\u0000!\"\u0005\t\u0000\u0000"+
-		"\",\u0005\u0004\u0000\u0000#$\u0005\u0002\u0000\u0000$%\u0005\r\u0000"+
-		"\u0000%&\u0005\b\u0000\u0000&\'\u0005\n\u0000\u0000\',\u0005\u0004\u0000"+
-		"\u0000()\u0005\r\u0000\u0000)*\u0005\b\u0000\u0000*,\u0005\u0004\u0000"+
-		"\u0000+\u001a\u0001\u0000\u0000\u0000+\u001e\u0001\u0000\u0000\u0000+"+
-		"#\u0001\u0000\u0000\u0000+(\u0001\u0000\u0000\u0000,\u0003\u0001\u0000"+
-		"\u0000\u0000-.\u0007\u0001\u0000\u0000.\u0005\u0001\u0000\u0000\u0000"+
-		"\u0004\n\u000f\u0015+";
+		"\u0001\u0001\u0001\u0001\u0001\u0001\u0001\u0003\u0001(\b\u0001\u0001"+
+		"\u0002\u0001\u0002\u0001\u0002\u0000\u0000\u0003\u0000\u0002\u0004\u0000"+
+		"\u0002\u0001\u0000\u0003\u0004\u0001\u0000\u0001\u0002.\u0000\u0006\u0001"+
+		"\u0000\u0000\u0000\u0002\'\u0001\u0000\u0000\u0000\u0004)\u0001\u0000"+
+		"\u0000\u0000\u0006\u000f\u0003\u0002\u0001\u0000\u0007\t\u0007\u0000\u0000"+
+		"\u0000\b\u0007\u0001\u0000\u0000\u0000\t\n\u0001\u0000\u0000\u0000\n\b"+
+		"\u0001\u0000\u0000\u0000\n\u000b\u0001\u0000\u0000\u0000\u000b\f\u0001"+
+		"\u0000\u0000\u0000\f\u000e\u0003\u0002\u0001\u0000\r\b\u0001\u0000\u0000"+
+		"\u0000\u000e\u0011\u0001\u0000\u0000\u0000\u000f\r\u0001\u0000\u0000\u0000"+
+		"\u000f\u0010\u0001\u0000\u0000\u0000\u0010\u0015\u0001\u0000\u0000\u0000"+
+		"\u0011\u000f\u0001\u0000\u0000\u0000\u0012\u0014\u0007\u0000\u0000\u0000"+
+		"\u0013\u0012\u0001\u0000\u0000\u0000\u0014\u0017\u0001\u0000\u0000\u0000"+
+		"\u0015\u0013\u0001\u0000\u0000\u0000\u0015\u0016\u0001\u0000\u0000\u0000"+
+		"\u0016\u0018\u0001\u0000\u0000\u0000\u0017\u0015\u0001\u0000\u0000\u0000"+
+		"\u0018\u0019\u0005\u0000\u0000\u0001\u0019\u0001\u0001\u0000\u0000\u0000"+
+		"\u001a\u001b\u0005\u0001\u0000\u0000\u001b\u001c\u0005\r\u0000\u0000\u001c"+
+		"\u001d\u0005\b\u0000\u0000\u001d(\u0005\t\u0000\u0000\u001e\u001f\u0005"+
+		"\u0002\u0000\u0000\u001f \u0005\r\u0000\u0000 !\u0005\b\u0000\u0000!("+
+		"\u0005\n\u0000\u0000\"#\u0003\u0004\u0002\u0000#$\u0005\r\u0000\u0000"+
+		"$(\u0001\u0000\u0000\u0000%&\u0005\r\u0000\u0000&(\u0005\b\u0000\u0000"+
+		"\'\u001a\u0001\u0000\u0000\u0000\'\u001e\u0001\u0000\u0000\u0000\'\"\u0001"+
+		"\u0000\u0000\u0000\'%\u0001\u0000\u0000\u0000(\u0003\u0001\u0000\u0000"+
+		"\u0000)*\u0007\u0001\u0000\u0000*\u0005\u0001\u0000\u0000\u0000\u0004"+
+		"\n\u000f\u0015\'";
 	public static final ATN _ATN =
 		new ATNDeserializer().deserialize(_serializedATN.toCharArray());
 	static {
