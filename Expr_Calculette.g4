@@ -49,6 +49,7 @@ instruction
     // “sadece Afficher yazdırır” olduğu için bunu eklememek daha temiz.
     ;
 
+<<<<<<< HEAD
 declInstr
     : t=type ids=idList
       {
@@ -65,6 +66,12 @@ declInstr
             
             symtab.put(name, e);
         }
+=======
+declInstr // Declaration instruction
+    : type idList //TODO 
+      { 
+        // semantic: her ID için tabloya (type, initialized=false) ekle
+>>>>>>> 584e58f (Updateing)
       }
     ;
 
