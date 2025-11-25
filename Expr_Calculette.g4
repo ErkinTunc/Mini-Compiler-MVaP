@@ -136,6 +136,21 @@ arithmExpr returns [int value]
                                                   $value = $A1.value - $A2.value;
                                                 } 
                                               }   // addSub 
+    | id=ID
+      {
+        String name = $id.getText();
+        VarEntry v = symtab.get(name);
+        if (v == null) {
+            throw new RuntimeException("Undeclared variable: " + name);
+        }
+        if (!v.initialized) {
+            throw new RuntimeException("Uninitialized variable: " + name);
+        }
+        if (!"int".equals(v.type)) {
+            throw new RuntimeException("Type error: " + name + " is not int");
+        }
+        $value = v.ivalue;
+      }
     | ENTIER { $value = Integer.parseInt($ENTIER.getText()); }  // intLiteral
     ;
 // Boolean expressions "arithm  >  comparaisons >  not >  and  >  or" 
@@ -155,6 +170,21 @@ boolExpr returns [boolean value]
             case ">=": $value = ($a1.value >= $a2.value); break;
             default:   $value = false; // should not happen
         }
+      }
+    | id=ID
+      {
+        String name = $id.getText();
+        VarEntry v = symtab.get(name);
+        if (v == null) {
+            throw new RuntimeException("Undeclared variable: " + name);
+        }
+        if (!v.initialized) {
+            throw new RuntimeException("Uninitialized variable: " + name);
+        }
+        if (!"bool".equals(v.type)) {
+            throw new RuntimeException("Type error: " + name + " is not bool");
+        }
+        $value = v.bvalue;
       }
     | 'true'                        { $value =  true; }
     | 'false'                       { $value =  false; }
