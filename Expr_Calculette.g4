@@ -1,5 +1,5 @@
-// Compilation : antlr4 Expr_Calculette.g4 -o ./Expr_Calculette/bin
-// Execution   : javac -d ./Expr_Calculette/bin/ ./Expr_Calculette/bin/*.java
+// Compilation : antlr4 Expr_Calculette.g4
+// Execution   : javac Expr_Calculette*.java
 
 // grun Expr_Calculette start -tree
 //  input : 
