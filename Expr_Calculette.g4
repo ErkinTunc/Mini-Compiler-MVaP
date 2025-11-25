@@ -39,13 +39,20 @@ instruction
     : declInstr                            // declInstruction
     | assignInstr                          // assignInstruction
     |  e=expr
+      // {
+      //   if ($e.isBool)
+      //       System.out.println("Afficher : " + $e.bvalue);
+      //   else
+      //       System.out.println("Afficher : " + $e.ivalue);
+      // }
+    // “sadece Afficher : yazdırır” olduğu için bunu eklememek daha temiz.
+    | 'Afficher' e=expr
       {
         if ($e.isBool)
             System.out.println("Afficher : " + $e.bvalue);
         else
             System.out.println("Afficher : " + $e.ivalue);
       }
-    // “sadece Afficher : yazdırır” olduğu için bunu eklememek daha temiz.
     ;
 
 declInstr

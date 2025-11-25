@@ -24,11 +24,16 @@ grammar Variable ;
 
 // ---------------- Parser rules ----------------
 start
-    : variable
-      ( (SEMICOLON | NEWLINE)+ variable )*
+    : instruction
+      ( (SEMICOLON | NEWLINE)+ instruction )*
       (SEMICOLON | NEWLINE)*
       EOF
     ;
+
+instruction 
+    : variable
+    | 'Afficher' variable
+    ; 
 
 variable
          // { $VariableParser.symtab.put(
