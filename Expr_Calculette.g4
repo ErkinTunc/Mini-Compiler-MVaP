@@ -25,6 +25,8 @@ grammar Expr_Calculette;
     }
 
     Map<String, VarEntry> symtab = new HashMap<>(); // symtab : symbole table
+
+    static Scanner in = new Scanner(System.in);
 }
 
 // ---------------- Parser rules ----------------
@@ -38,20 +40,12 @@ start
 instruction
     : declInstr                            // declInstruction
     | assignInstr                          // assignInstruction
-    |  e=expr
-      // {
-      //   if ($e.isBool)
-      //       System.out.println("Afficher : " + $e.bvalue);
-      //   else
-      //       System.out.println("Afficher : " + $e.ivalue);
-      // }
-    // “sadece Afficher : yazdırır” olduğu için bunu eklememek daha temiz.
-    | 'Afficher' e=expr
+    | 'Afficher' '(' e=expr ')'
       {
         if ($e.isBool)
-            System.out.println("Afficher : " + $e.bvalue);
+            System.out.println(" Afficher : " + $e.bvalue);
         else
-            System.out.println("Afficher : " + $e.ivalue);
+            System.out.println(" Afficher : " + $e.ivalue);
       }
     ;
 
@@ -125,7 +119,13 @@ expr returns [Integer ivalue, Boolean bvalue, boolean isBool]
 
 // Arithmetic expressions "  unary - () > * / > + -  "           |         factor  >  term  >  arithmExpr
 arithmExpr returns [int value]
-    : ADDSUB a=arithmExpr{if ($ADDSUB.getText().equals("-"))
+    : 'lire' '(' ')'
+      {
+        System.out.print("Entrez un entier : ");
+        $value = in.nextInt();
+      }
+
+    | ADDSUB a=arithmExpr{if ($ADDSUB.getText().equals("-"))
                             $value = -$a.value;
                           else
                               $value = +$a.value;
@@ -143,6 +143,35 @@ arithmExpr returns [int value]
                                                   $value = $A1.value - $A2.value;
                                                 } 
                                               }   // addSub 
+        // ++x / --x  : önce eski değeri kullan, sonra değiştir
+    | op=INCDEC id=ID
+      {
+        String name = $id.getText();
+        VarEntry v = symtab.get(name);
+        if (v == null)  throw new RuntimeException("Undeclared variable: " + name);
+        if (!v.initialized) throw new RuntimeException("Uninitialized variable: " + name);
+        if (!"int".equals(v.type)) throw new RuntimeException("Type error: " + name + " is not int");
+
+        int old = v.ivalue;
+        if ($op.getText().equals("++")) v.ivalue = old + 1;
+        else                            v.ivalue = old - 1;
+        $value = old; // eski değer kullanılıyor
+      }
+
+    // x++ / x-- : önce değiştir, sonra yeni değeri kullan
+    | id=ID op=INCDEC
+      {
+        String name = $id.getText();
+        VarEntry v = symtab.get(name);
+        if (v == null)  throw new RuntimeException("Undeclared variable: " + name);
+        if (!v.initialized) throw new RuntimeException("Uninitialized variable: " + name);
+        if (!"int".equals(v.type)) throw new RuntimeException("Type error: " + name + " is not int");
+
+        int old = v.ivalue; // ancien valueur 
+        if ($op.getText().equals("++")) v.ivalue = old + 1; // nouveau valeur
+        else                            v.ivalue = old - 1; // nouveau valeur
+        $value = v.ivalue; // yeni değer kullanılıyor
+      }
     | id=ID
       {
         String name = $id.getText();
@@ -163,7 +192,12 @@ arithmExpr returns [int value]
 // Boolean expressions "arithm  >  comparaisons >  not >  and  >  or" 
 
 boolExpr returns [boolean value]
-    : 'not' e=boolExpr              { $value = ! $e.value; }
+    : 'lire' '(' ')'
+      {
+        System.out.print("Entrez un booléen (true/false) : ");
+        $value = in.nextBoolean();
+      }
+    | 'not' e=boolExpr              { $value = ! $e.value; }
     | '(' e=boolExpr ')'            { $value =  $e.value; }
     | e1=boolExpr 'and' e2=boolExpr { $value =  $e1.value && $e2.value; }
     | e1=boolExpr 'or'  e2=boolExpr { $value =  $e1.value || $e2.value; }
@@ -203,6 +237,7 @@ SEMICOLON : ';' ;           // match semicolons
 
 MULDIV : ('*' | '/');      // $MULDIV.getText()  | $MULDIV.getType() 
 ADDSUB : ('+' | '-');      // $ADDSUB.getText()  | $ADDSUB.getType()
+INCDEC : '++' | '--' ;     // $INCDEC.getText()  | $INCDEC.getType()
 LOGICOP : ('==' | '<>' | '<' | '<=' | '>' | '>='); // $LOGICOP.getText()  | $LOGICOP.getType()
 
 ENTIER : ('0'..'9')+;       // match integers , all sequences of digits
@@ -212,3 +247,4 @@ ID : [a-zA-Z_] [a-zA-Z0-9_]* ;// match identifiers
 
 WS : (' '|'\t')+ -> skip;   // ignore spaces and tabs
 UNMATCH : . -> skip;        // ignore any other character
+
