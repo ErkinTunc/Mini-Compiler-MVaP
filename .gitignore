@@ -1,0 +1,28 @@
+# ANTLR-generated sources
+*.tokens
+*.interp
+*.g4.log
+*.g4.lexer
+*.g4.parser
+
+# Output directories used by tutorials or defaults
+gen/
+generated/
+out/
+
+# Java targets (kullanıyorsan)
+target/
+*.class
+
+# NodeJS için ANTLR kullanıyorsan
+node_modules/
+
+# Python için ANTLR kullanıyorsan
+__pycache__/
+*.pyc
+
+# VSCode settings
+.vscode/
+
+# OS garbage
+.DS_Store
