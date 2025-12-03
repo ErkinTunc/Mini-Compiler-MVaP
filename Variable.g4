@@ -3,6 +3,9 @@
 
 // grun Variable start -gui
 
+// antlr4 Expr_Calculette.g4 -o ./Expr_Calculette/bin
+// javac -d ./Expr_Calculette/bin/ ./Expr_Calculette/bin/*.java
+
 grammar Variable ;
 @header
 {
