@@ -16,17 +16,49 @@ grammar Expr_Calculette;
  import java.util.*;
  }
 
-@members {
+@parser::members { // Juste pour le parser // pas pour le lexer
     static class VarEntry {
-        String type;        // "int" veya "bool"
+        String type;
         boolean initialized;
-        Integer ivalue;     // sadece int için kullan
-        Boolean bvalue;     // sadece bool için kullan
+        Integer ivalue;
+        Boolean bvalue;
     }
 
-    Map<String, VarEntry> symtab = new HashMap<>(); // symtab : symbole table
+    Map<String, VarEntry> symtab = new HashMap<>();
+    Deque<Map<String, VarEntry>> symtabStack = new ArrayDeque<>(); // Stack for symbol tables
 
     static Scanner in = new Scanner(System.in);
+
+    // Deep copy: VarEntry'leri de kopyalıyoruz
+    Map<String, VarEntry> cloneSymtab(Map<String, VarEntry> src) {
+        Map<String, VarEntry> copy = new HashMap<>();  // "copy" -> nouvelle table des symboles (table copiee)
+        for (Map.Entry<String, VarEntry> e : src.entrySet()) {
+            VarEntry v = e.getValue();
+            VarEntry nv = new VarEntry();   // On creé un nouvelle objet VarEntry
+            nv.type = v.type;               // On affecte les valuers et types
+            nv.initialized = v.initialized;
+            nv.ivalue = v.ivalue;
+            nv.bvalue = v.bvalue;
+            copy.put(e.getKey(), nv);
+        }
+        return copy;
+    }
+
+    // Next token ID ise ve bool değişken ise true
+    boolean isBoolVarToken() {
+        org.antlr.v4.runtime.Token t = _input.LT(1);
+        if (t.getType() != ID) return false;      //Le prochain token n'est pas un ID
+        VarEntry v = symtab.get(t.getText());
+        return v != null && "bool".equals(v.type); // Le type de la variable est bool
+    }
+
+    // Next token ID ise ve int değişken ise true
+    boolean isIntVarToken() {
+        org.antlr.v4.runtime.Token t = _input.LT(1);
+        if (t.getType() != ID) return false;     //Le prochain token n'est pas un ID
+        VarEntry v = symtab.get(t.getText());
+        return v != null && "int".equals(v.type); // Le type de la variable est int
+    }
 }
 
 // ---------------- Parser rules ----------------
@@ -47,23 +79,21 @@ instruction
         else
             System.out.println(" Afficher : " + $e.ivalue);
       }
+    | blockInstr
     ;
 
 declInstr
     : t=type ids=idList
       {
         for (String name : $ids.value) {
-            if (symtab.containsKey(name)) {
-                throw new RuntimeException("Variable already declared: " + name);
-            }
-
+            // Shadowing'e izin veriyoruz: aynı isim varsa bile üzerine yazarız
             VarEntry e = new VarEntry();
             e.type = $t.value;
             e.initialized = false;
             e.ivalue = null;
             e.bvalue = null;
-            
-            symtab.put(name, e);
+
+            symtab.put(name, e); // mevcut girdinin üzerine yazar
         }
       }
     ;
@@ -111,6 +141,22 @@ assignInstr
       }
     ;
 
+blockInstr
+    : '{'
+      {
+          // Bloka girerken: snapshot + yeni tablo
+          symtabStack.push(symtab);         // eski referansı stack'e koy
+          symtab = cloneSymtab(symtab);     // mevcut tabloyu kopyala ve kopya ile çalış
+      }
+      ( (SEMICOLON | NEWLINE)* instruction )*
+      (SEMICOLON | NEWLINE)*
+      '}'
+      {
+          // Bloktan çıkarken: eski tabloya geri dön
+          symtab = symtabStack.pop();
+      }
+    ;
+
 // Combined expressions
 expr returns [Integer ivalue, Boolean bvalue, boolean isBool]
     : b=boolExpr   { $isBool = true;  $bvalue = $b.value;  $ivalue = null; }
@@ -124,27 +170,7 @@ arithmExpr returns [int value]
         System.out.print("Entrez un entier : ");
         $value = in.nextInt();
       }
-
-    | ADDSUB a=arithmExpr{if ($ADDSUB.getText().equals("-"))
-                            $value = -$a.value;
-                          else
-                              $value = +$a.value;
-                        }  // unaryMinus
-    | '(' A1=arithmExpr ')'                  { $value = $A1.value;}                // arithParens // parantez değeri yanlızca değeri döndürür
-    | A1=arithmExpr MULDIV A2=arithmExpr     { if ($MULDIV.getText().equals("*")) {
-                                                   $value = $A1.value * $A2.value;
-                                                } else {
-                                                  $value = $A1.value / $A2.value;
-                                                } 
-                                              } // mulDiv 
-    | A1=arithmExpr ADDSUB A2=arithmExpr     { if ($ADDSUB.getText().equals("+")) {
-                                                   $value = $A1.value + $A2.value;
-                                                } else {
-                                                  $value = $A1.value - $A2.value;
-                                                } 
-                                              }   // addSub 
-        // ++x / --x  : önce eski değeri kullan, sonra değiştir
-    | op=INCDEC id=ID
+    | op=INCDEC id=ID // ++x / --x  : önce eski değeri kullan, sonra değiştir
       {
         String name = $id.getText();
         VarEntry v = symtab.get(name);
@@ -157,9 +183,7 @@ arithmExpr returns [int value]
         else                            v.ivalue = old - 1;
         $value = old; // eski değer kullanılıyor
       }
-
-    // x++ / x-- : önce değiştir, sonra yeni değeri kullan
-    | id=ID op=INCDEC
+    | id=ID op=INCDEC // x++ / x-- : önce değiştir, sonra yeni değeri kullan
       {
         String name = $id.getText();
         VarEntry v = symtab.get(name);
@@ -172,7 +196,7 @@ arithmExpr returns [int value]
         else                            v.ivalue = old - 1; // nouveau valeur
         $value = v.ivalue; // yeni değer kullanılıyor
       }
-    | id=ID
+    | {isIntVarToken()}? id=ID    // fonction isIntVarToken -> si token est ID et variable de type int 
       {
         String name = $id.getText();
         VarEntry v = symtab.get(name);
@@ -182,15 +206,31 @@ arithmExpr returns [int value]
         if (!v.initialized) {
             throw new RuntimeException("Uninitialized variable: " + name);
         }
-        if (!"int".equals(v.type)) {
-            throw new RuntimeException("Type error: " + name + " is not int");
-        }
         $value = v.ivalue;
       }
     | ENTIER { $value = Integer.parseInt($ENTIER.getText()); }  // intLiteral
-    ;
-// Boolean expressions "arithm  >  comparaisons >  not >  and  >  or" 
+    | ADDSUB a=arithmExpr{if ($ADDSUB.getText().equals("-"))
+                            $value = -$a.value;
+                          else
+                              $value = +$a.value;
+                        }  // unaryMinus
+    | '(' A1=arithmExpr ')'                  { $value = $A1.value;}                // arithParens // parantez değeri yanlızca değeri döndürür
 
+    | A1=arithmExpr MULDIV A2=arithmExpr     { if ($MULDIV.getText().equals("*")) {
+                                                   $value = $A1.value * $A2.value;
+                                                } else {
+                                                  $value = $A1.value / $A2.value;
+                                                } 
+                                              } // mulDiv 
+    | A1=arithmExpr ADDSUB A2=arithmExpr     { if ($ADDSUB.getText().equals("+")) {
+                                                   $value = $A1.value + $A2.value;
+                                                } else {
+                                                  $value = $A1.value - $A2.value;
+                                                } 
+                                              }   // addSub 
+    ;
+
+// Boolean expressions "arithm  >  comparaisons >  not >  and  >  or" 
 boolExpr returns [boolean value]
     : 'lire' '(' ')'
       {
@@ -212,7 +252,7 @@ boolExpr returns [boolean value]
             default:   $value = false; // should not happen
         }
       }
-    | id=ID
+     | {isBoolVarToken()}? id=ID   // fonction isBoolVarToken -> si token est ID et variable de type bool
       {
         String name = $id.getText();
         VarEntry v = symtab.get(name);
@@ -221,9 +261,6 @@ boolExpr returns [boolean value]
         }
         if (!v.initialized) {
             throw new RuntimeException("Uninitialized variable: " + name);
-        }
-        if (!"bool".equals(v.type)) {
-            throw new RuntimeException("Type error: " + name + " is not bool");
         }
         $value = v.bvalue;
       }
