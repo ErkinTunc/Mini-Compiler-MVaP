@@ -24,6 +24,7 @@ grammar Expr_Calculette;
         Boolean bvalue;
     }
 
+<<<<<<< HEAD
     Map<String, VarEntry> symtab = new HashMap<>();
     Deque<Map<String, VarEntry>> symtabStack = new ArrayDeque<>(); // Stack for symbol tables
 
@@ -59,6 +60,11 @@ grammar Expr_Calculette;
         VarEntry v = symtab.get(t.getText());
         return v != null && "int".equals(v.type); // Le type de la variable est int
     }
+=======
+    Map<String, VarEntry> symtab = new HashMap<>(); // symtab : symbole table
+
+    Scanner scanner = new Scanner(System.in); // Permet de lire des entrées pour l'instruction lire
+>>>>>>> 9a9ffed (Refactor lexer and parser to enhance support for 'Afficher' instruction)
 }
 
 // ---------------- Parser rules ----------------
@@ -238,16 +244,51 @@ arithmExpr returns [int value]
                                                   $value = $A1.value - $A2.value;
                                                 } 
                                               }   // addSub 
+<<<<<<< HEAD
+=======
+    | LIRE
+      {
+          try
+          {
+              $value = scanner.nextInt();
+          } 
+          catch (Exception ex)
+          {
+              throw new RuntimeException("Expected int from lire()");
+          }
+      }
+
+    | id=ID
+      {
+        String name = $id.getText();
+        VarEntry v = symtab.get(name);
+        if (v == null) {
+            throw new RuntimeException("Undeclared variable: " + name);
+        }
+        if (!v.initialized) {
+            throw new RuntimeException("Uninitialized variable: " + name);
+        }
+        if (!"int".equals(v.type)) {
+            throw new RuntimeException("Type error: " + name + " is not int");
+        }
+        $value = v.ivalue;
+      }
+    | ENTIER { $value = Integer.parseInt($ENTIER.getText()); }  // intLiteral
+>>>>>>> 9a9ffed (Refactor lexer and parser to enhance support for 'Afficher' instruction)
     ;
 
 // Boolean expressions "arithm  >  comparaisons >  not >  and  >  or" 
 boolExpr returns [boolean value]
+<<<<<<< HEAD
     : 'lire' '(' ')'
       {
         System.out.print("Entrez un booléen (true/false) : ");
         $value = in.nextBoolean();
       }
     | 'not' e=boolExpr              { $value = ! $e.value; }
+=======
+    :'not' e=boolExpr              { $value = ! $e.value; }
+>>>>>>> 9a9ffed (Refactor lexer and parser to enhance support for 'Afficher' instruction)
     | '(' e=boolExpr ')'            { $value =  $e.value; }
     | e1=boolExpr 'and' e2=boolExpr { $value =  $e1.value && $e2.value; }
     | e1=boolExpr 'or'  e2=boolExpr { $value =  $e1.value || $e2.value; }
@@ -262,7 +303,19 @@ boolExpr returns [boolean value]
             default:   $value = false; // should not happen
         }
       }
+<<<<<<< HEAD
      | {isBoolVarToken()}? id=ID   // fonction isBoolVarToken -> si token est ID et variable de type bool
+=======
+    | LIRE
+      {
+          try {
+              $value = scanner.nextBoolean();
+          } catch (Exception ex) {
+              throw new RuntimeException("Expected bool from lire()");
+          }
+      }
+    | id=ID
+>>>>>>> 9a9ffed (Refactor lexer and parser to enhance support for 'Afficher' instruction)
       {
         String name = $id.getText();
         VarEntry v = symtab.get(name);
@@ -277,6 +330,8 @@ boolExpr returns [boolean value]
     | 'true'                        { $value =  true; }
     | 'false'                       { $value =  false; }
     ;
+
+LIRE : 'lire' ;
 
 // ---------------- Lexer rules ----------------
 NEWLINE : '\r'? '\n';       // match newlines
@@ -295,3 +350,20 @@ ID : [a-zA-Z_] [a-zA-Z0-9_]* ;// match identifiers
 WS : (' '|'\t')+ -> skip;   // ignore spaces and tabs
 UNMATCH : . -> skip;        // ignore any other character
 
+<<<<<<< HEAD
+=======
+
+
+/**
+TEST INPUT :
+int x;
+bool b;
+
+x = lire;        // lit un entier
+b = lire;        // lit un booléen
+
+Afficher x + 3;
+Afficher not b;
+Afficher x < 10 and b;
+ */
+>>>>>>> 9a9ffed (Refactor lexer and parser to enhance support for 'Afficher' instruction)
