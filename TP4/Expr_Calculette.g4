@@ -24,47 +24,9 @@ grammar Expr_Calculette;
         Boolean bvalue;
     }
 
-<<<<<<< HEAD
-    Map<String, VarEntry> symtab = new HashMap<>();
-    Deque<Map<String, VarEntry>> symtabStack = new ArrayDeque<>(); // Stack for symbol tables
-
-    static Scanner in = new Scanner(System.in);
-
-    // Deep copy: VarEntry'leri de kopyalıyoruz
-    Map<String, VarEntry> cloneSymtab(Map<String, VarEntry> src) {
-        Map<String, VarEntry> copy = new HashMap<>();  // "copy" -> nouvelle table des symboles (table copiee)
-        for (Map.Entry<String, VarEntry> e : src.entrySet()) {
-            VarEntry v = e.getValue();
-            VarEntry nv = new VarEntry();   // On creé un nouvelle objet VarEntry
-            nv.type = v.type;               // On affecte les valuers et types
-            nv.initialized = v.initialized;
-            nv.ivalue = v.ivalue;
-            nv.bvalue = v.bvalue;
-            copy.put(e.getKey(), nv);
-        }
-        return copy;
-    }
-
-    // Next token ID ise ve bool değişken ise true
-    boolean isBoolVarToken() {
-        org.antlr.v4.runtime.Token t = _input.LT(1);
-        if (t.getType() != ID) return false;      //Le prochain token n'est pas un ID
-        VarEntry v = symtab.get(t.getText());
-        return v != null && "bool".equals(v.type); // Le type de la variable est bool
-    }
-
-    // Next token ID ise ve int değişken ise true
-    boolean isIntVarToken() {
-        org.antlr.v4.runtime.Token t = _input.LT(1);
-        if (t.getType() != ID) return false;     //Le prochain token n'est pas un ID
-        VarEntry v = symtab.get(t.getText());
-        return v != null && "int".equals(v.type); // Le type de la variable est int
-    }
-=======
     Map<String, VarEntry> symtab = new HashMap<>(); // symtab : symbole table
 
     Scanner scanner = new Scanner(System.in); // Permet de lire des entrées pour l'instruction lire
->>>>>>> 9a9ffed (Refactor lexer and parser to enhance support for 'Afficher' instruction)
 }
 
 // ---------------- Parser rules ----------------
@@ -91,10 +53,6 @@ instruction
 declInstr
     : t=type ids=idList
       {
-<<<<<<< HEAD
-        for (String name : $ids.value) {
-            // Shadowing'e izin veriyoruz: aynı isim varsa bile üzerine yazarız
-=======
         for (String name : $ids.value)
         {
             if (symtab.containsKey(name))
@@ -102,7 +60,6 @@ declInstr
                 throw new RuntimeException("Variable already declared: " + name);
             }
 
->>>>>>> 9aed00f (Created version control)
             VarEntry e = new VarEntry();
             e.type = $t.value;
             e.initialized = false;
@@ -244,8 +201,6 @@ arithmExpr returns [int value]
                                                   $value = $A1.value - $A2.value;
                                                 } 
                                               }   // addSub 
-<<<<<<< HEAD
-=======
     | LIRE
       {
           try
@@ -274,21 +229,11 @@ arithmExpr returns [int value]
         $value = v.ivalue;
       }
     | ENTIER { $value = Integer.parseInt($ENTIER.getText()); }  // intLiteral
->>>>>>> 9a9ffed (Refactor lexer and parser to enhance support for 'Afficher' instruction)
     ;
 
 // Boolean expressions "arithm  >  comparaisons >  not >  and  >  or" 
 boolExpr returns [boolean value]
-<<<<<<< HEAD
-    : 'lire' '(' ')'
-      {
-        System.out.print("Entrez un booléen (true/false) : ");
-        $value = in.nextBoolean();
-      }
-    | 'not' e=boolExpr              { $value = ! $e.value; }
-=======
     :'not' e=boolExpr              { $value = ! $e.value; }
->>>>>>> 9a9ffed (Refactor lexer and parser to enhance support for 'Afficher' instruction)
     | '(' e=boolExpr ')'            { $value =  $e.value; }
     | e1=boolExpr 'and' e2=boolExpr { $value =  $e1.value && $e2.value; }
     | e1=boolExpr 'or'  e2=boolExpr { $value =  $e1.value || $e2.value; }
@@ -303,9 +248,6 @@ boolExpr returns [boolean value]
             default:   $value = false; // should not happen
         }
       }
-<<<<<<< HEAD
-     | {isBoolVarToken()}? id=ID   // fonction isBoolVarToken -> si token est ID et variable de type bool
-=======
     | LIRE
       {
           try {
@@ -315,7 +257,6 @@ boolExpr returns [boolean value]
           }
       }
     | id=ID
->>>>>>> 9a9ffed (Refactor lexer and parser to enhance support for 'Afficher' instruction)
       {
         String name = $id.getText();
         VarEntry v = symtab.get(name);
@@ -350,20 +291,4 @@ ID : [a-zA-Z_] [a-zA-Z0-9_]* ;// match identifiers
 WS : (' '|'\t')+ -> skip;   // ignore spaces and tabs
 UNMATCH : . -> skip;        // ignore any other character
 
-<<<<<<< HEAD
-=======
 
-
-/**
-TEST INPUT :
-int x;
-bool b;
-
-x = lire;        // lit un entier
-b = lire;        // lit un booléen
-
-Afficher x + 3;
-Afficher not b;
-Afficher x < 10 and b;
- */
->>>>>>> 9a9ffed (Refactor lexer and parser to enhance support for 'Afficher' instruction)
