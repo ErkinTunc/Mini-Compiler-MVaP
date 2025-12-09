@@ -26,3 +26,6 @@ __pycache__/
 
 # OS garbage
 .DS_Store
+
+# ANTLR4 java files 
+*.java
