@@ -1,7 +1,7 @@
 // Generated from Rationnel.g4 by ANTLR 4.9.2
 
  import java.util.*;
- 
+
 import org.antlr.v4.runtime.atn.*;
 import org.antlr.v4.runtime.dfa.DFA;
 import org.antlr.v4.runtime.*;
@@ -119,11 +119,13 @@ public class RationnelParser extends Parser {
 
 	    StringBuilder code = new StringBuilder();  // holds the MVaP body
 
+	  // @deprecated
 	    int labelCounter = 0;
 	    String newLabel(String base) {
 	        return base + "_" + (labelCounter++);
 	    }
 
+	    
 	    void emit(String instr) {
 	        code.append(instr).append("\n");
 	    }

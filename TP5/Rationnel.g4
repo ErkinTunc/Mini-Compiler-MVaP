@@ -40,9 +40,10 @@
 
 grammar Rationnel;
 
-@header {
+@header
+{
  import java.util.*;
- }
+}
 
 @parser::members { // Juste pour le parser // pas pour le lexer
 
@@ -74,11 +75,13 @@ grammar Rationnel;
 
     StringBuilder code = new StringBuilder();  // holds the MVaP body
 
+  // @deprecated
     int labelCounter = 0;
     String newLabel(String base) {
         return base + "_" + (labelCounter++);
     }
 
+    
     void emit(String instr) {
         code.append(instr).append("\n");
     }
