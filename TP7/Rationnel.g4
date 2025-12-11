@@ -4,14 +4,12 @@
   Exécution : grun Rationnel 'start' -gui 
   */
 
-
 /**
 — Utilisation de variables globales : déclaration, affectation et utilisation dans des expressions.
 — Blocs.
 — Structures conditionnelles.
 — Boucles.
  */
-
 
 grammar Rationnel;
 
@@ -132,7 +130,8 @@ soit un bloc d’instructions. Par exemple le code source suivant devrait être 
 struc_conditionnel
   : cond=boolexpr '?' thenInstr=instruction ( ':' elseInstr=instruction )
   {
-    // Generate code for conditional structure
+    // Generate code for conditional structure TODO
+    
     String elseLabel = newLabel("else");
     String endLabel = newLabel("end_if");
 
@@ -144,23 +143,25 @@ struc_conditionnel
     }
 
     // Then part
-    // (Generate code for thenInstr here)
+    // (Generate code for thenInstr here) TODO
 
     emit("JUMP " + endLabel);
 
     // Else part
     emit(elseLabel + ":");
 
-    // (Generate code for elseInstr here)
+    // (Generate code for elseInstr here) // TODO
 
     emit(endLabel + ":");
   }
   | cond=boolexpr '?' thenInstr=instruction 
   {
     // Generate code for conditional structure
+
     String endLabel = newLabel("end_if");
 
     // Evaluate condition
+
     if ( !$cond.value )
     {
         // Jump to end if condition is false
@@ -168,6 +169,7 @@ struc_conditionnel
     }
 
     // Then part
+
     // (Generate code for thenInstr here)
 
     emit(endLabel + ":");

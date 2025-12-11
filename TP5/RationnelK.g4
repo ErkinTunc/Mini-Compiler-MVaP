@@ -10,7 +10,7 @@
 // grun Expr_Calculette start -gui
 //  input : 
 
-grammar Expr_Calculette;
+grammar RationnelK;
 
 @header {
  import java.util.*;
