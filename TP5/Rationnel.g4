@@ -26,6 +26,26 @@
             Afficher( 1/2 < 3/4 );
             Afficher( 1/2 == 2/4 );
             Afficher( 3/4 >= 1/2 );
+
+            Afficher( (1/2) ** 0 );
+            Afficher( (1/2) ** 1 );
+            Afficher( (1/2) ** 2 );
+
+            Afficher( num(3/4 + 1/2) );
+            Afficher( denum(3/4 + 1/2) );
+
+            Afficher(true);
+            Afficher(false);
+
+            Afficher(1/2 < 3/4);
+            Afficher(1/2 == 2/4);
+            Afficher(1/2 >= 3/4);
+
+            Afficher(non (1/2 < 3/4));
+            Afficher((1/2 < 3/4) et (3/4 < 5/6));
+            Afficher((1/2 < 3/4) ou (3/4 < 1/4));
+            Afficher(non ((1/2 < 3/4) ou false));
+
  */
 
 /*
@@ -100,6 +120,102 @@ grammar Rationnel;
         code.append(instr).append("\n");
     }
 
+    String genAnd(String c1, String c2) {
+    String L_FALSE = newLabel("AND_FALSE");
+    String L_END   = newLabel("AND_END");
+    StringBuilder c = new StringBuilder();
+
+    // Evaluate left operand
+    c.append(c1);                // stack: ..., v1
+
+    // If v1 == 0, jump to false branch (JUMPF pops v1)
+    c.append("JUMPF " + L_FALSE + "\n");
+
+    // Here: v1 != 0 (true), but it has been popped
+    // Evaluate right operand, its value is the final result
+    c.append(c2);                // stack: ..., v2
+    c.append("JUMP " + L_END + "\n");
+
+    // False branch: v1 was 0 and has been popped
+    c.append("LABEL " + L_FALSE + "\n");
+    c.append("PUSHI 0\n");       // result = 0
+
+    c.append("LABEL " + L_END + "\n");
+    return c.toString();
+}
+
+String genOr(String c1, String c2) {
+    String L_EVAL_E2 = newLabel("OR_EVAL_E2");
+    String L_END     = newLabel("OR_END");
+    StringBuilder c = new StringBuilder();
+
+    // Evaluate left operand
+    c.append(c1);                 // stack: ..., v1
+
+    // If v1 == 0, need to evaluate e2 (JUMPF pops v1 when it is 0)
+    c.append("JUMPF " + L_EVAL_E2 + "\n");
+
+    // Here: v1 != 0 (true) and has been popped
+    c.append("PUSHI 1\n");        // result = 1
+    c.append("JUMP " + L_END + "\n");
+
+    c.append("LABEL " + L_EVAL_E2 + "\n");
+    // v1 was 0 and has been popped; now evaluate e2
+    c.append(c2);                 // stack: ..., v2
+
+    c.append("LABEL " + L_END + "\n");
+    return c.toString();
+}
+
+String genNot(String inner) {
+    StringBuilder c = new StringBuilder();
+    c.append(inner);           // stack: ..., v
+    c.append("PUSHI 0\n");     // ..., v, 0
+    c.append("EQUAL\n");       // 1 iff v == 0
+    return c.toString();
+}
+
+String genCmp(String c1, String opText, String c2) {
+    StringBuilder c = new StringBuilder();
+    c.append(c1);  // ..., n1,d1
+    c.append(c2);  // ..., n1,d1,n2,d2
+
+    StringBuilder opCode = new StringBuilder();
+    // stack: ..., n1,d1,n2,d2
+    opCode.append("STOREG " + G_TMP0 + "\n"); // d2
+    opCode.append("STOREG " + G_TMP1 + "\n"); // n2
+    opCode.append("STOREG " + G_TMP2 + "\n"); // d1
+    opCode.append("STOREG " + G_TMP3 + "\n"); // n1
+
+    // cross products L = n1*d2, R = n2*d1
+    opCode.append("PUSHG " + G_TMP3 + "\n");
+    opCode.append("PUSHG " + G_TMP0 + "\n");
+    opCode.append("MUL\n"); // L
+
+    opCode.append("PUSHG " + G_TMP1 + "\n");
+    opCode.append("PUSHG " + G_TMP2 + "\n");
+    opCode.append("MUL\n"); // R
+
+    if (opText.equals("<")) {
+        opCode.append("INF\n");
+    } else if (opText.equals("<=")) {
+        opCode.append("INFEQ\n");
+    } else if (opText.equals(">")) {
+        opCode.append("SUP\n");
+    } else if (opText.equals(">=")) {
+        opCode.append("SUPEQ\n");
+    } else if (opText.equals("==")) {
+        opCode.append("EQUAL\n");
+    } else if (opText.equals("<>")) {
+        opCode.append("NEQ\n");
+    } else {
+        throw new RuntimeException("Unknown LOGICOP: " + opText);
+    }
+
+    c.append(opCode.toString());
+    return c.toString();
+}
+
 }
 
 // ---------------- Parser rules ----------------
@@ -152,10 +268,10 @@ instruction
 
 // Combined expressions
 expr returns [String code, String exprType]
-    : b=boolExpr  {$code = $b.code; $exprType = "bool";}
-    | a=arithmExpr{$code = $a.code; // For now, treat arithmetic as rationals
-                   $exprType = "rat";}
+    : b=boolOr      { $code = $b.code; $exprType = "bool"; }
+    | a=arithmExpr  { $code = $a.code; $exprType = "rat";  } // non > et > ou
     ;
+
 
 // Arithmetic expressions:  unary +/- > * / > + -
 arithmExpr returns [String code]
@@ -214,7 +330,32 @@ arithmTerm returns [String code]
       {
         $code = $f1.code;
       }
-      ( op=MULDIV f2=arithmPow
+      ( '/' 'lire' '(' ')'   // special case: right is lire() as integer
+        {
+          StringBuilder c = new StringBuilder();
+          c.append($code);          // stack: ..., n1, d1
+
+          // Read integer n (denominator as integer)
+          c.append("READ\n");       // stack: ..., n1, d1, n
+
+          // Use temps:
+          // g0 = n, g2 = d1, g3 = n1
+          c.append("STOREG " + G_TMP0 + "\n"); // g0 = n
+          c.append("STOREG " + G_TMP2 + "\n"); // g2 = d1
+          c.append("STOREG " + G_TMP3 + "\n"); // g3 = n1
+
+          // (n1/d1) / (n/1) = n1 / (d1 * n)
+          // num = n1
+          c.append("PUSHG " + G_TMP3 + "\n");  // num = n1
+
+          // den = d1 * n
+          c.append("PUSHG " + G_TMP2 + "\n");  // d1
+          c.append("PUSHG " + G_TMP0 + "\n");  // n
+          c.append("MUL\n");                   // den
+
+          $code = c.toString();
+        }
+      | op=MULDIV f2=arithmPow
         {
           StringBuilder c = new StringBuilder();
           c.append($code);
@@ -256,7 +397,6 @@ arithmTerm returns [String code]
         }
       )*
     ;
-
 
 
 arithmAtom returns [String code]
@@ -322,7 +462,11 @@ arithmAtom returns [String code]
       {
         $code = $e.code;
       }
-    
+    | 'lire' '(' ')'   // rational read
+      {
+        // READ num, then READ den; stack: ..., num, den
+        $code = "READ\nREAD\n";
+      }
     ;
 
 arithmPow returns [String code]
@@ -376,12 +520,34 @@ arithmPow returns [String code]
 
           $code = c.toString();
         }
+      | POW 'lire' '(' ')'
+          { // runtime loop version
+            // TODO: implement runtime exponent with lire()
+            StringBuilder c = new StringBuilder();
+            // For now, do nothing smart, just reuse base (equivalent to power 1)
+            c.append($a1.code);
+            $code = c.toString();
+          }
       )?
     ;
 
 
-// Boolean expressions 
-boolExpr returns [String code]
+boolOr returns [String code]
+    : a=boolAnd              { $code = $a.code; }
+      ( 'ou' b=boolAnd       { $code = genOr($code, $b.code); } )*
+    ;
+
+boolAnd returns [String code]
+    : a=boolNot              { $code = $a.code; }
+      ( 'et' b=boolNot       { $code = genAnd($code, $b.code); } )*
+    ;
+
+boolNot returns [String code]
+    : 'non' b=boolNot        { $code = genNot($b.code); }
+    | boolAtom               { $code = $boolAtom.code; }
+    ;
+
+boolAtom returns [String code]
     : 'true'
       {
         $code = "PUSHI 1\n";  // true = 1
@@ -390,62 +556,26 @@ boolExpr returns [String code]
       {
         $code = "PUSHI 0\n";  // false = 0
       }
-
-    // comparison between two rationals
     | a1=arithmExpr op=LOGICOP a2=arithmExpr
       {
-        StringBuilder c = new StringBuilder();
-        c.append($a1.code);   // stack: ..., n1,d1
-        c.append($a2.code);   // stack: ..., n1,d1,n2,d2
-
-        StringBuilder opCode = new StringBuilder();
-
-        // stack: ..., n1,d1,n2,d2
-        // temps: g0=d2, g1=n2, g2=d1, g3=n1
-        opCode.append("STOREG " + G_TMP0 + "\n"); // g0 = d2
-        opCode.append("STOREG " + G_TMP1 + "\n"); // g1 = n2
-        opCode.append("STOREG " + G_TMP2 + "\n"); // g2 = d1
-        opCode.append("STOREG " + G_TMP3 + "\n"); // g3 = n1
-
-        // Compute cross products: L = n1*d2, R = n2*d1
-        opCode.append("PUSHG " + G_TMP3 + "\n");  // n1
-        opCode.append("PUSHG " + G_TMP0 + "\n");  // d2
-        opCode.append("MUL\n");                   // L = n1*d2
-
-        opCode.append("PUSHG " + G_TMP1 + "\n");  // n2
-        opCode.append("PUSHG " + G_TMP2 + "\n");  // d1
-        opCode.append("MUL\n");                   // R = n2*d1
-
-        // Now top of stack: ..., L, R
-        // Use MVaP compare instruction according to op
-        String opText = $op.getText();
-        if (opText.equals("<")) {
-            opCode.append("INF\n");      // 1 if L < R else 0
-        } else if (opText.equals("<=")) {
-            opCode.append("INFEQ\n");    // 1 if L <= R else 0
-        } else if (opText.equals(">")) {
-            opCode.append("SUP\n");      // 1 if L > R else 0
-        } else if (opText.equals(">=")) {
-            opCode.append("SUPEQ\n");    // 1 if L >= R else 0
-        } else if (opText.equals("==")) {
-            opCode.append("EQUAL\n");    // 1 if L == R else 0
-        } else if (opText.equals("<>")) {
-            opCode.append("NEQ\n");      // 1 if L != R else 0
-        } else {
-            throw new RuntimeException("Unknown LOGICOP: " + opText);
-        }
-
-        // After INF/INFEQ/... stack: ..., (0|1)
-        c.append(opCode.toString());
-        $code = c.toString();
+        $code = genCmp($a1.code, $op.getText(), $a2.code);
       }
-
-    // parenthesized boolean
-    | '(' b=boolExpr ')'
+    | '(' b=boolOr ')'
       {
         $code = $b.code;
       }
+    | 'lire' '(' ')'   // boolean read
+        {
+          // READ one int; treat != 0 as true
+          // stack: ..., v != 0 ? 1 : 0
+          StringBuilder c = new StringBuilder();
+          c.append("READ\n");      // ..., v
+          c.append("PUSHI 0\n");   // ..., v, 0
+          c.append("NEQ\n");       // ..., (v != 0 ? 1 : 0)
+          $code = c.toString();
+        }
     ;
+
 
 // ---------------- Lexer rules ----------------
 NEWLINE : '\r'? '\n';       // match newlines
