@@ -250,22 +250,22 @@ start
 instruction
     : 'Afficher' '(' e=expr ')'
       {
-        // Generate code for expression
         emit($e.code);
 
+        if ($e.exprType == null) {
+            throw new RuntimeException("Internal error: exprType is null");
+        }
+
         if ($e.exprType.equals("bool") ) {
-            // stack: ..., v
-            emit("WRITE");   // print v
-            emit("POP");     // remove v
+            emit("WRITE");
+            emit("POP");
         } else if ($e.exprType.equals("rat")) {
-            // stack: ..., num, den (den on top)
-            // Use G_TMP0 to save den while printing num
-            emit("STOREG " + G_TMP0); // g0 = den, stack: ..., num
-            emit("WRITE");            // print num
-            emit("POP");              // pop num
-            emit("PUSHG " + G_TMP0);  // restore den
-            emit("WRITE");            // print den
-            emit("POP");              // pop den
+            emit("STOREG " + G_TMP0);
+            emit("WRITE");
+            emit("POP");
+            emit("PUSHG " + G_TMP0);
+            emit("WRITE");
+            emit("POP");
         } else {
             throw new RuntimeException("Unknown expr type: " + $e.exprType);
         }
@@ -632,30 +632,29 @@ boolNot returns [String code]
 boolAtom returns [String code]
     : 'true'
       {
-        $code = "PUSHI 1\n";  // true = 1
+        $code = "PUSHI 1\n";
       }
     | 'false'
       {
-        $code = "PUSHI 0\n";  // false = 0
+        $code = "PUSHI 0\n";
       }
     | a1=arithmExpr op=LOGICOP a2=arithmExpr
       {
         $code = genCmp($a1.code, $op.getText(), $a2.code);
       }
-    | '(' b=boolOr ')'
+    | '(' e=expr ')'
       {
-        $code = $b.code;
+        // Parantez içinde herhangi bir expr (bool veya rat)
+        $code = $e.code;
       }
-    | 'lire' '(' ')'   // boolean read
-        {
-          // READ one int; treat != 0 as true
-          // stack: ..., v != 0 ? 1 : 0
-          StringBuilder c = new StringBuilder();
-          c.append("READ\n");      // ..., v
-          c.append("PUSHI 0\n");   // ..., v, 0
-          c.append("NEQ\n");       // ..., (v != 0 ? 1 : 0)
-          $code = c.toString();
-        }
+    | 'lire' '(' ')'
+      {
+        StringBuilder c = new StringBuilder();
+        c.append("READ\n");
+        c.append("PUSHI 0\n");
+        c.append("NEQ\n");
+        $code = c.toString();
+      }
     ;
 
 
