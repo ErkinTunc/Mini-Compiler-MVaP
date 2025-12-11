@@ -130,7 +130,7 @@ instruction
         // Generate code for expression
         emit($e.code);
 
-        if ($e.exprType.equals("bool") || $e.exprType.equals("int")) {
+        if ($e.exprType.equals("bool") ) {
             // stack: ..., v
             emit("WRITE");   // print v
             emit("POP");     // remove v
@@ -170,7 +170,7 @@ arithmExpr returns [String code]
           c.append($t2.code);
 
           StringBuilder opCode = new StringBuilder();
-          // stack: ..., n1,d1,n2,d2 (d2 en üstte)
+          // stack: ..., n1,d1,n2,d2 (d2 on top)
           // temps: g0=d2, g1=n2, g2=d1, g3=n1
           opCode.append("STOREG " + G_TMP0 + "\n"); // g0 = d2
           opCode.append("STOREG " + G_TMP1 + "\n"); // g1 = n2
@@ -199,9 +199,9 @@ arithmExpr returns [String code]
           }
 
           // den = d1*d2
-          opCode.append("PUSHG " + G_TMP2 + "\n");     // d1
-          opCode.append("PUSHG " + G_TMP0 + "\n");     // d2
-          opCode.append("MUL\n");                      // den
+          opCode.append("PUSHG " + G_TMP2 + "\n");
+          opCode.append("PUSHG " + G_TMP0 + "\n");
+          opCode.append("MUL\n");
 
           c.append(opCode.toString());
           $code = c.toString();
@@ -210,11 +210,11 @@ arithmExpr returns [String code]
     ;
 
 arithmTerm returns [String code]
-    : f1=arithmAtom
+    : f1=arithmPow
       {
         $code = $f1.code;
       }
-      ( op=MULDIV f2=arithmAtom
+      ( op=MULDIV f2=arithmPow
         {
           StringBuilder c = new StringBuilder();
           c.append($code);
@@ -257,8 +257,30 @@ arithmTerm returns [String code]
       )*
     ;
 
+
+
 arithmAtom returns [String code]
-    : ADDSUB a=arithmAtom      // unary + / -
+     : 'num' '(' r=arithmExpr ')'
+      {
+        // after a: ..., num, den
+        StringBuilder c = new StringBuilder();
+        c.append($r.code);
+        c.append("STOREG " + G_TMP0 + "\n"); // g0 = den, stack: ..., num
+        c.append("PUSHI 1\n");               // make it num/1
+        $code = c.toString();
+      }
+    | 'denum' '(' r=arithmExpr ')'
+      {
+        // after a: ..., num, den
+        StringBuilder c = new StringBuilder();
+        c.append($r.code);
+        c.append("STOREG " + G_TMP0 + "\n"); // g0 = den, stack: ..., num
+        c.append("POP\n");                   // drop num
+        c.append("PUSHG " + G_TMP0 + "\n");  // push den
+        c.append("PUSHI 1\n");               // den/1
+        $code = c.toString();
+      }
+    | ADDSUB a=arithmAtom      // unary + / -
       {
         String op = $ADDSUB.getText();
         StringBuilder c = new StringBuilder();
@@ -302,6 +324,61 @@ arithmAtom returns [String code]
       }
     
     ;
+
+arithmPow returns [String code]
+    : a1=arithmAtom
+      {
+        // Default: no exponent, just the atom
+        $code = $a1.code;
+      }
+      ( POW e=ENTIER
+        {
+          int n = Integer.parseInt($e.getText());
+          if (n < 0) {
+              throw new RuntimeException("Negative exponent not supported: " + n);
+          }
+
+          StringBuilder c = new StringBuilder();
+
+          if (n == 0) {
+              // r^0 = 1/1 for any non-zero rational r
+              // We completely ignore the base
+              c.append("PUSHI 1\n");
+              c.append("PUSHI 1\n");
+          } else {
+              // First power: r^1 = base
+              c.append($a1.code);  // stack: ..., num, den
+
+              // Multiply by base (n-1) times: r^i * base
+              for (int i = 1; i < n; i++) {
+                  // Push base again
+                  c.append($a1.code);   // stack: ..., r^i, num, den
+
+                  // Multiply top two rationals: r^i * base
+                  // stack pattern: ..., n1,d1,n2,d2  (d2 on top)
+                  c.append("STOREG " + G_TMP0 + "\n"); // g0 = d2
+                  c.append("STOREG " + G_TMP1 + "\n"); // g1 = n2
+                  c.append("STOREG " + G_TMP2 + "\n"); // g2 = d1
+                  c.append("STOREG " + G_TMP3 + "\n"); // g3 = n1
+
+                  // num = n1 * n2
+                  c.append("PUSHG " + G_TMP3 + "\n");  // n1
+                  c.append("PUSHG " + G_TMP1 + "\n");  // n2
+                  c.append("MUL\n");
+
+                  // den = d1 * d2
+                  c.append("PUSHG " + G_TMP2 + "\n");  // d1
+                  c.append("PUSHG " + G_TMP0 + "\n");  // d2
+                  c.append("MUL\n");
+                  // stack now: ..., num, den = r^(i+1)
+              }
+          }
+
+          $code = c.toString();
+        }
+      )?
+    ;
+
 
 // Boolean expressions 
 boolExpr returns [String code]
@@ -374,6 +451,7 @@ boolExpr returns [String code]
 NEWLINE : '\r'? '\n';       // match newlines
 SEMICOLON : ';' ;           // match semicolons
 
+POW    : '**' ;            // $POW.getText()  | $POW.getType()
 MULDIV : ('*' | '/');      // $MULDIV.getText()  | $MULDIV.getType() 
 ADDSUB : ('+' | '-');      // $ADDSUB.getText()  | $ADDSUB.getType()
 INCDEC : '++' | '--' ;     // $INCDEC.getText()  | $INCDEC.getType()
