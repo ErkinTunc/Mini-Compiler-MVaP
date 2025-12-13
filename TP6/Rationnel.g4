@@ -525,140 +525,114 @@ arithmAtom returns [String code]
     ;
 
 arithmPow returns [String code]
-    : a1=arithmAtom
+  : a1=arithmAtom
+    {
+      // Varsayılan: taban (power yoksa sadece a1)
+      $code = $a1.code;
+    }
+    (
+      // ---- (1) static exponent: (r) ** 3 ----
+      POW e=ENTIER
       {
-        // Varsayılan: taban (power yoksa sadece a1)
-        $code = $a1.code;
+        int n = Integer.parseInt($e.getText());
+        if (n < 0) {
+            throw new RuntimeException("Negative exponent not supported: " + n);
+        }
+        StringBuilder c = new StringBuilder();
+        if (n == 0) {
+            // r^0 = 1/1
+            c.append("PUSHI 1\n");
+            c.append("PUSHI 1\n");
+        } else {
+            // r^1 = base
+            c.append($a1.code);  // base'i yeniden üret
+            for (int i = 1; i < n; i++) {
+                // stack: ..., r^i, num, den
+                c.append($a1.code);   // base'i tekrar koy
+                // iki rasyoneli çarp (r^i * base)
+                c.append("STOREG " + G_TMP0 + "\n"); // d2
+                c.append("STOREG " + G_TMP1 + "\n"); // n2
+                c.append("STOREG " + G_TMP2 + "\n"); // d1
+                c.append("STOREG " + G_TMP3 + "\n"); // n1
+                // num = n1 * n2
+                c.append("PUSHG " + G_TMP3 + "\n");
+                c.append("PUSHG " + G_TMP1 + "\n");
+                c.append("MUL\n");
+                // den = d1 * d2
+                c.append("PUSHG " + G_TMP2 + "\n");
+                c.append("PUSHG " + G_TMP0 + "\n");
+                c.append("MUL\n");
+                // stack: ..., num, den = r^(i+1)
+            }
+        }
+        $code = c.toString();
       }
-      (
-        // ---- (1) static exponent: (r) ** 3 ----
-        POW e=ENTIER
-        {
-          int n = Integer.parseInt($e.getText());
-          if (n < 0) {
-              throw new RuntimeException("Negative exponent not supported: " + n);
-          }
-
-          StringBuilder c = new StringBuilder();
-
-          if (n == 0) {
-              // r^0 = 1/1
-              c.append("PUSHI 1\n");
-              c.append("PUSHI 1\n");
-          } else {
-              // r^1 = base
-              c.append($a1.code);  // base'i yeniden üret
-
-              for (int i = 1; i < n; i++) {
-                  // stack: ..., r^i, num, den
-                  c.append($a1.code);   // base'i tekrar koy
-
-                  // iki rasyoneli çarp (r^i * base)
-                  c.append("STOREG " + G_TMP0 + "\n"); // d2
-                  c.append("STOREG " + G_TMP1 + "\n"); // n2
-                  c.append("STOREG " + G_TMP2 + "\n"); // d1
-                  c.append("STOREG " + G_TMP3 + "\n"); // n1
-
-                  // num = n1 * n2
-                  c.append("PUSHG " + G_TMP3 + "\n");
-                  c.append("PUSHG " + G_TMP1 + "\n");
-                  c.append("MUL\n");
-
-                  // den = d1 * d2
-                  c.append("PUSHG " + G_TMP2 + "\n");
-                  c.append("PUSHG " + G_TMP0 + "\n");
-                  c.append("MUL\n");
-                  // stack: ..., num, den = r^(i+1)
-              }
-          }
-
-          $code = c.toString();
-        }
-
-        // ---- (2) runtime exponent: (r) ** lire() ----
-      | POW 'lire' '(' ')'
-        {
-          StringBuilder c = new StringBuilder();
-
-          // 1. Tabanı üret: stack: ..., num, den
-          c.append($a1.code);
-
-          // 2. Tabanı global değişkenlere kaydet
-          c.append("STOREG " + G_POW_BASE_DEN + "\n"); // base_den
-          c.append("STOREG " + G_POW_BASE_NUM + "\n"); // base_num
-
-          // 3. Üssü input'tan oku
-          c.append("READ\n");                            // ..., n
-          c.append("STOREG " + G_POW_EXP + "\n");        // exp = n, stack boş
-
-          // 4. Sonucu 1/1 ile başlat: res = 1/1
-          c.append("PUSHI 1\n");                         // num
-          c.append("PUSHI 1\n");                         // den
-          c.append("STOREG " + G_POW_RES_DEN + "\n");    // res_den
-          c.append("STOREG " + G_POW_RES_NUM + "\n");    // res_num
-
-          String L_CHECK = newLabel("POW_CHECK");
-          String L_END   = newLabel("POW_END");
-
-          // 5. Döngü: while (exp > 0) { res = res * base; exp--; }
-          c.append("LABEL " + L_CHECK + "\n");
-
-          // if exp == 0 -> get out
-          c.append("PUSHG " + G_POW_EXP + "\n");
-          c.append("PUSHI 0\n");
-          c.append("EQUAL\n");
-          c.append("JUMPT " + L_END + "\n");
-
-          // ---- res = res * base ----
-          // stack: ...
-          // push res (n1,d1)
-          c.append("PUSHG " + G_POW_RES_NUM + "\n");
-          c.append("PUSHG " + G_POW_RES_DEN + "\n");
-
-          // push base (n2,d2)
-          c.append("PUSHG " + G_POW_BASE_NUM + "\n");
-          c.append("PUSHG " + G_POW_BASE_DEN + "\n");
-
-          // şimdi stack: ..., n1,d1,n2,d2
-
-          // tmp'lere koy
-          c.append("STOREG " + G_TMP0 + "\n"); // d2
-          c.append("STOREG " + G_TMP1 + "\n"); // n2
-          c.append("STOREG " + G_TMP2 + "\n"); // d1
-          c.append("STOREG " + G_TMP3 + "\n"); // n1
-
-          // num_new = n1 * n2
-          c.append("PUSHG " + G_TMP3 + "\n");
-          c.append("PUSHG " + G_TMP1 + "\n");
-          c.append("MUL\n");
-
-          // den_new = d1 * d2
-          c.append("PUSHG " + G_TMP2 + "\n");
-          c.append("PUSHG " + G_TMP0 + "\n");
-          c.append("MUL\n");
-
-          // yeni sonucu res_num / res_den olarak kaydet
-          c.append("STOREG " + G_POW_RES_DEN + "\n");
-          c.append("STOREG " + G_POW_RES_NUM + "\n");
-
-          // exp--
-          c.append("PUSHG " + G_POW_EXP + "\n");
-          c.append("PUSHI 1\n");
-          c.append("SUB\n");
-          c.append("STOREG " + G_POW_EXP + "\n");
-
-          // tekrar kontrol
-          c.append("JUMP " + L_CHECK + "\n");
-
-          // 6. Döngü bitti -> sonucu stack'e koy
-          c.append("LABEL " + L_END + "\n");
-          c.append("PUSHG " + G_POW_RES_NUM + "\n");
-          c.append("PUSHG " + G_POW_RES_DEN + "\n");
-
-          $code = c.toString();
-        }
-      )?
-    ;
+      // ---- (2) runtime exponent: (r) ** lire() ----
+    | POW 'lire' '(' ')'
+      {
+        StringBuilder c = new StringBuilder();
+        // 1. Tabanı üret: stack: ..., num, den
+        c.append($a1.code);
+        // 2. Tabanı global değişkenlere kaydet
+        c.append("STOREG " + G_POW_BASE_DEN + "\n"); // base_den
+        c.append("STOREG " + G_POW_BASE_NUM + "\n"); // base_num
+        // 3. Üssü input'tan oku
+        c.append("READ\n");                            // ..., n
+        c.append("STOREG " + G_POW_EXP + "\n");        // exp = n, stack boş
+        // 4. Sonucu 1/1 ile başlat: res = 1/1
+        c.append("PUSHI 1\n");                         // num
+        c.append("PUSHI 1\n");                         // den
+        c.append("STOREG " + G_POW_RES_DEN + "\n");    // res_den
+        c.append("STOREG " + G_POW_RES_NUM + "\n");    // res_num
+        String L_CHECK = newLabel("POW_CHECK");
+        String L_END   = newLabel("POW_END");
+        // 5. Döngü: while (exp > 0) { res = res * base; exp--; }
+        c.append("LABEL " + L_CHECK + "\n");
+        // if exp == 0 -> get out
+        c.append("PUSHG " + G_POW_EXP + "\n");
+        c.append("PUSHI 0\n");
+        c.append("EQUAL\n");
+        c.append("JUMPT " + L_END + "\n");
+        // ---- res = res * base ----
+        // stack: ...
+        // push res (n1,d1)
+        c.append("PUSHG " + G_POW_RES_NUM + "\n");
+        c.append("PUSHG " + G_POW_RES_DEN + "\n");
+        // push base (n2,d2)
+        c.append("PUSHG " + G_POW_BASE_NUM + "\n");
+        c.append("PUSHG " + G_POW_BASE_DEN + "\n");
+        // şimdi stack: ..., n1,d1,n2,d2
+        // tmp'lere koy
+        c.append("STOREG " + G_TMP0 + "\n"); // d2
+        c.append("STOREG " + G_TMP1 + "\n"); // n2
+        c.append("STOREG " + G_TMP2 + "\n"); // d1
+        c.append("STOREG " + G_TMP3 + "\n"); // n1
+        // num_new = n1 * n2
+        c.append("PUSHG " + G_TMP3 + "\n");
+        c.append("PUSHG " + G_TMP1 + "\n");
+        c.append("MUL\n");
+        // den_new = d1 * d2
+        c.append("PUSHG " + G_TMP2 + "\n");
+        c.append("PUSHG " + G_TMP0 + "\n");
+        c.append("MUL\n");
+        // yeni sonucu res_num / res_den olarak kaydet
+        c.append("STOREG " + G_POW_RES_DEN + "\n");
+        c.append("STOREG " + G_POW_RES_NUM + "\n");
+        // exp--
+        c.append("PUSHG " + G_POW_EXP + "\n");
+        c.append("PUSHI 1\n");
+        c.append("SUB\n");
+        c.append("STOREG " + G_POW_EXP + "\n");
+        // tekrar kontrol
+        c.append("JUMP " + L_CHECK + "\n");
+        // 6. Döngü bitti -> sonucu stack'e koy
+        c.append("LABEL " + L_END + "\n");
+        c.append("PUSHG " + G_POW_RES_NUM + "\n");
+        c.append("PUSHG " + G_POW_RES_DEN + "\n");
+        $code = c.toString();
+      }
+    )?
+  ;
 
 
 
