@@ -22,10 +22,11 @@ grammar Rationnel;
 { 
   static class VarEntry
   {
-    String type;        // "int" or "bool"
+    String type;        // type \in {int, rationnal, bool}
     boolean initialized;
-    Integer ivalue;    
-    Boolean bvalue;  
+
+    Integer ivalue; //    
+    Boolean bvalue; // 
     Double dvalue ; // Rationnel
 
     int address;     // address in MVaP memory   
@@ -33,7 +34,6 @@ grammar Rationnel;
 
   HashMap < String, VarEntry > varTab = new HashMap<>(); 
   // holds variable names and types and addresses in MVaP
-
 
   StringBuilder code = new StringBuilder();  // holds the MVaP code
 
@@ -44,6 +44,9 @@ grammar Rationnel;
     return base + "_" + (labelCounter++);
   }
 
+  /**
+   * Emit MVaP instructions
+   */
   void emit(String instr)
   {
     code.append(instr).append("\n");
@@ -76,7 +79,6 @@ instruction
 
 declInstr
   : t=type ids=idList
-
   ;
 
 type returns [String value]
@@ -96,11 +98,10 @@ assignInstr
     : id=ID '=' e=expr
     ;
 
-
 // Nous allons reprendre les régles des TPs précédents pour les expressions arithmétiques et booléennes
 // Cela nous permettra de passer au tests
 expr  
-  :  e1=arithmexpr
+  : e1=arithmexpr
   | e2=boolexpr
   ;
 

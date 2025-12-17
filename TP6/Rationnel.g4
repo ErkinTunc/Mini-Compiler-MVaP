@@ -1,79 +1,14 @@
-// Compilation : antlr4 Rationnel.g4
-// Execution   : javac Rationnel*.java
-
-// grun Rationnel start -tree
-//  input : 
-
-// grun Rationnel start -tokens
-//  input : 
-   
-// grun Rationnel start -gui
-/*   input : 
-            Afficher(3 + 4);
-            Afficher(3 * 4);
-            Afficher(3 / 4);
-            Afficher(3 - 4);
-
-            Afficher(5/2);
-            Afficher(3/4 + 1/2);
-            Afficher((1/3) * (3/4))
-
-            Afficher(-3);           --> -3  1  --> -3/1
-            Afficher(-(3/4));
-            Afficher(1 + -2);
-            Afficher(-(1/2) + 3/4);
-
-            Afficher( 1/2 < 3/4 );
-            Afficher( 1/2 == 2/4 );
-            Afficher( 3/4 >= 1/2 );
-
-            Afficher( (1/2) ** 0 );
-            Afficher( (1/2) ** 1 );
-            Afficher( (1/2) ** 2 );
-
-            Afficher( num(3/4 + 1/2) );
-            Afficher( denum(3/4 + 1/2) );
-
-            Afficher(true);
-            Afficher(false);
-
-            Afficher(1/2 < 3/4);
-            Afficher(1/2 == 2/4);
-            Afficher(1/2 >= 3/4);
-
-            Afficher(non (1/2 < 3/4));
-            Afficher((1/2 < 3/4) et (3/4 < 5/6));
-            Afficher((1/2 < 3/4) ou (3/4 < 1/4));
-            Afficher(non ((1/2 < 3/4) ou false));
-
- */
 
 /*
-  == Booleans on MVaP ==
-    false is 0
-    true is 1
-    Every boolean expression must leave exactly one integer on top of the stack: 0 or 1
+  Compilation : antlr4 ./Rationnel.g4 -o ./build/ & javac ./build/*.java
   
-  == Rationals on MVaP stack ==
-    Pick one representation and never change it.
-    
-    + A rational = two ints on the stack:
-      - [..., num, den] with den on top
+  Exécution : grun Rationnel 'start' -gui 
+  */
 
-    + So after compiling a rational expression r, the stack ends as:
-      - ..., num(r), den(r)
-
-  == Temporary global cells ==
-  ecide now how many temp cells you want and what they’re for. 
-  
-  Example:
-      g0..g3 reserved for temp rationals:
-          g0, g1, g2, g3 = scratch for num/den during +, -, *, /, comparisons, etc.
-
-      Later you can add more if absolutely necessary, but start small.
-
+/*
+ == Booleans on MVaP == false is 0 true is 1 Every boolean expression must leave exactly one integer
+ on top of the stack: 0 or 1
  */
-
 
 grammar Rationnel;
 
@@ -225,10 +160,11 @@ String genCmp(String c1, String opText, String c2) {
 
 }
 
+// ----------------------------------------------
 // ---------------- Parser rules ----------------
-start
-    : (instruction (SEMICOLON | NEWLINE)*)* EOF
-      {
+
+
+start: (instruction (SEMICOLON | NEWLINE)*)* EOF {
         StringBuilder prog = new StringBuilder();
 
         // Reserve temp globals (g0..g3)
@@ -244,17 +180,15 @@ start
         prog.append("HALT\n");
 
         System.out.println(prog.toString());
-      }
-    ;
+      };
 
 instruction
     : afficher_instr
     | simplifier_instr
     ; 
 
-afficher_instr 
-    : 'Afficher' '(' e=expr ')'
-      {
+afficher_instr
+    :'Afficher' '(' e = expr ')' {
         emit($e.code);
 
         if ($e.exprType == null) {
@@ -274,8 +208,7 @@ afficher_instr
         } else {
             throw new RuntimeException("Unknown expr type: " + $e.exprType);
         }
-      }
-    ;
+      };
 
 
 simplifier_instr returns [ int n , int d ]
@@ -320,22 +253,19 @@ simplifier_instr returns [ int n , int d ]
   }
   ;
 
-
 // Combined expressions
-expr returns [String code, String exprType]
-    : b=boolOr      { $code = $b.code; $exprType = "bool"; }
-    | a=arithmExpr  { $code = $a.code; $exprType = "rat";  } // non > et > ou
-    ;
-
+expr
+	returns[String code, String exprType]:
+	b = boolOr { $code = $b.code; $exprType = "bool"; }
+	| a = arithmExpr { $code = $a.code; $exprType = "rat";  } ; // non > et > ou
 
 // Arithmetic expressions:  unary +/- > * / > + -
-arithmExpr returns [String code]
-    : t1=arithmTerm
-      {
+arithmExpr
+	returns[String code]:
+	t1 = arithmTerm {
         $code = $t1.code;
-      }
-      ( op=ADDSUB t2=arithmTerm
-        {
+      } (
+		op = ADDSUB t2 = arithmTerm {
           StringBuilder c = new StringBuilder();
           c.append($code);
           c.append($t2.code);
@@ -377,16 +307,15 @@ arithmExpr returns [String code]
           c.append(opCode.toString());
           $code = c.toString();
         }
-      )*
-    ;
+	)*;
 
-arithmTerm returns [String code]
-    : f1=arithmPow
-      {
+arithmTerm
+	returns[String code]:
+	f1 = arithmPow {
         $code = $f1.code;
-      }
-      ( '/' 'lire' '(' ')'   // special case: right is lire() as integer
-        {
+      } (
+		'/' 'lire' '(' ')' // special case: right is lire() as integer
+		{
           StringBuilder c = new StringBuilder();
           c.append($code);          // stack: ..., n1, d1
 
@@ -410,8 +339,7 @@ arithmTerm returns [String code]
 
           $code = c.toString();
         }
-      | op=MULDIV f2=arithmPow
-        {
+		| op = MULDIV f2 = arithmPow {
           StringBuilder c = new StringBuilder();
           c.append($code);
           c.append($f2.code);
@@ -450,13 +378,11 @@ arithmTerm returns [String code]
           c.append(opCode.toString());
           $code = c.toString();
         }
-      )*
-    ;
+	)*;
 
-
-arithmAtom returns [String code]
-     : 'num' '(' r=arithmExpr ')'
-      {
+arithmAtom
+	returns[String code]:
+	'num' '(' r = arithmExpr ')' {
         // after a: ..., num, den
         StringBuilder c = new StringBuilder();
         c.append($r.code);
@@ -464,8 +390,7 @@ arithmAtom returns [String code]
         c.append("PUSHI 1\n");               // make it num/1
         $code = c.toString();
       }
-    | 'denum' '(' r=arithmExpr ')'
-      {
+	| 'denum' '(' r = arithmExpr ')' {
         // after a: ..., num, den
         StringBuilder c = new StringBuilder();
         c.append($r.code);
@@ -475,8 +400,8 @@ arithmAtom returns [String code]
         c.append("PUSHI 1\n");               // den/1
         $code = c.toString();
       }
-    | ADDSUB a=arithmAtom      // unary + / -
-      {
+	| ADDSUB a = arithmAtom // unary + / -
+	{
         String op = $ADDSUB.getText();
         StringBuilder c = new StringBuilder();
         c.append($a.code); // stack: ..., num, den
@@ -494,8 +419,8 @@ arithmAtom returns [String code]
             $code = c.toString();
         }
       }
-    | ENTIER '/' ENTIER    // rational literal: a/b
-      {
+	| ENTIER '/' ENTIER // rational literal: a/b
+	{
           String a = $ENTIER(0).getText();
           String b = $ENTIER(1).getText();
           StringBuilder c = new StringBuilder();
@@ -503,9 +428,8 @@ arithmAtom returns [String code]
           c.append("PUSHI ").append(b).append("\n");
           $code = c.toString();
       }
-
-    | ENTIER        // integer literal: n  -> n/1
-      {
+	| ENTIER // integer literal: n  -> n/1
+	{
         // literal n as rational n/1 -> ..., n,1
         String n = $ENTIER.getText();
         StringBuilder c = new StringBuilder();
@@ -513,188 +437,202 @@ arithmAtom returns [String code]
         c.append("PUSHI 1\n");                     // den
         $code = c.toString();
       }
-    | '(' e=arithmExpr ')'         // parentheses
-      {
+	| '(' e = arithmExpr ')' // parentheses
+	{
         $code = $e.code;
       }
-    | 'lire' '(' ')'   // rational read
-      {
+	| 'lire' '(' ')' // rational read
+	{
         // READ num, then READ den; stack: ..., num, den
         $code = "READ\nREAD\n";
-      }
-    ;
+      };
 
-arithmPow returns [String code]
-  : a1=arithmAtom
-    {
-      // Varsayılan: taban (power yoksa sadece a1)
-      $code = $a1.code;
-    }
-    (
-      // ---- (1) static exponent: (r) ** 3 ----
-      POW e=ENTIER
-      {
-        int n = Integer.parseInt($e.getText());
-        if (n < 0) {
-            throw new RuntimeException("Negative exponent not supported: " + n);
+arithmPow
+	returns[String code]:
+	a1 = arithmAtom {
+        // Varsayılan: taban (power yoksa sadece a1)
+        $code = $a1.code;
+      } (
+		// ---- (1) static exponent: (r) ** 3 ----
+		POW e = ENTIER {
+          int n = Integer.parseInt($e.getText());
+          if (n < 0) {
+              throw new RuntimeException("Negative exponent not supported: " + n);
+          }
+
+          StringBuilder c = new StringBuilder();
+
+          if (n == 0) {
+              // r^0 = 1/1
+              c.append("PUSHI 1\n");
+              c.append("PUSHI 1\n");
+          } else {
+              // r^1 = base
+              c.append($a1.code);  // base'i yeniden üret
+
+              for (int i = 1; i < n; i++) {
+                  // stack: ..., r^i, num, den
+                  c.append($a1.code);   // base'i tekrar koy
+
+                  // iki rasyoneli çarp (r^i * base)
+                  c.append("STOREG " + G_TMP0 + "\n"); // d2
+                  c.append("STOREG " + G_TMP1 + "\n"); // n2
+                  c.append("STOREG " + G_TMP2 + "\n"); // d1
+                  c.append("STOREG " + G_TMP3 + "\n"); // n1
+
+                  // num = n1 * n2
+                  c.append("PUSHG " + G_TMP3 + "\n");
+                  c.append("PUSHG " + G_TMP1 + "\n");
+                  c.append("MUL\n");
+
+                  // den = d1 * d2
+                  c.append("PUSHG " + G_TMP2 + "\n");
+                  c.append("PUSHG " + G_TMP0 + "\n");
+                  c.append("MUL\n");
+                  // stack: ..., num, den = r^(i+1)
+              }
+          }
+
+          $code = c.toString();
         }
-        StringBuilder c = new StringBuilder();
-        if (n == 0) {
-            // r^0 = 1/1
-            c.append("PUSHI 1\n");
-            c.append("PUSHI 1\n");
-        } else {
-            // r^1 = base
-            c.append($a1.code);  // base'i yeniden üret
-            for (int i = 1; i < n; i++) {
-                // stack: ..., r^i, num, den
-                c.append($a1.code);   // base'i tekrar koy
-                // iki rasyoneli çarp (r^i * base)
-                c.append("STOREG " + G_TMP0 + "\n"); // d2
-                c.append("STOREG " + G_TMP1 + "\n"); // n2
-                c.append("STOREG " + G_TMP2 + "\n"); // d1
-                c.append("STOREG " + G_TMP3 + "\n"); // n1
-                // num = n1 * n2
-                c.append("PUSHG " + G_TMP3 + "\n");
-                c.append("PUSHG " + G_TMP1 + "\n");
-                c.append("MUL\n");
-                // den = d1 * d2
-                c.append("PUSHG " + G_TMP2 + "\n");
-                c.append("PUSHG " + G_TMP0 + "\n");
-                c.append("MUL\n");
-                // stack: ..., num, den = r^(i+1)
-            }
+
+		// ---- (2) runtime exponent: (r) ** lire() ----
+		| POW 'lire' '(' ')' {
+          StringBuilder c = new StringBuilder();
+
+          // 1. Tabanı üret: stack: ..., num, den
+          c.append($a1.code);
+
+          // 2. Tabanı global değişkenlere kaydet
+          c.append("STOREG " + G_POW_BASE_DEN + "\n"); // base_den
+          c.append("STOREG " + G_POW_BASE_NUM + "\n"); // base_num
+
+          // 3. Üssü input'tan oku
+          c.append("READ\n");                            // ..., n
+          c.append("STOREG " + G_POW_EXP + "\n");        // exp = n, stack boş
+
+          // 4. Sonucu 1/1 ile başlat: res = 1/1
+          c.append("PUSHI 1\n");                         // num
+          c.append("PUSHI 1\n");                         // den
+          c.append("STOREG " + G_POW_RES_DEN + "\n");    // res_den
+          c.append("STOREG " + G_POW_RES_NUM + "\n");    // res_num
+
+          String L_CHECK = newLabel("POW_CHECK");
+          String L_END   = newLabel("POW_END");
+
+          // 5. Döngü: while (exp > 0) { res = res * base; exp--; }
+          c.append("LABEL " + L_CHECK + "\n");
+
+          // if exp == 0 -> get out
+          c.append("PUSHG " + G_POW_EXP + "\n");
+          c.append("PUSHI 0\n");
+          c.append("EQUAL\n");
+          c.append("JUMPT " + L_END + "\n");
+
+          // ---- res = res * base ----
+          // stack: ...
+          // push res (n1,d1)
+          c.append("PUSHG " + G_POW_RES_NUM + "\n");
+          c.append("PUSHG " + G_POW_RES_DEN + "\n");
+
+          // push base (n2,d2)
+          c.append("PUSHG " + G_POW_BASE_NUM + "\n");
+          c.append("PUSHG " + G_POW_BASE_DEN + "\n");
+
+          // şimdi stack: ..., n1,d1,n2,d2
+
+          // tmp'lere koy
+          c.append("STOREG " + G_TMP0 + "\n"); // d2
+          c.append("STOREG " + G_TMP1 + "\n"); // n2
+          c.append("STOREG " + G_TMP2 + "\n"); // d1
+          c.append("STOREG " + G_TMP3 + "\n"); // n1
+
+          // num_new = n1 * n2
+          c.append("PUSHG " + G_TMP3 + "\n");
+          c.append("PUSHG " + G_TMP1 + "\n");
+          c.append("MUL\n");
+
+          // den_new = d1 * d2
+          c.append("PUSHG " + G_TMP2 + "\n");
+          c.append("PUSHG " + G_TMP0 + "\n");
+          c.append("MUL\n");
+
+          // yeni sonucu res_num / res_den olarak kaydet
+          c.append("STOREG " + G_POW_RES_DEN + "\n");
+          c.append("STOREG " + G_POW_RES_NUM + "\n");
+
+          // exp--
+          c.append("PUSHG " + G_POW_EXP + "\n");
+          c.append("PUSHI 1\n");
+          c.append("SUB\n");
+          c.append("STOREG " + G_POW_EXP + "\n");
+
+          // tekrar kontrol
+          c.append("JUMP " + L_CHECK + "\n");
+
+          // 6. Döngü bitti -> sonucu stack'e koy
+          c.append("LABEL " + L_END + "\n");
+          c.append("PUSHG " + G_POW_RES_NUM + "\n");
+          c.append("PUSHG " + G_POW_RES_DEN + "\n");
+
+          $code = c.toString();
         }
-        $code = c.toString();
-      }
-      // ---- (2) runtime exponent: (r) ** lire() ----
-    | POW 'lire' '(' ')'
-      {
-        StringBuilder c = new StringBuilder();
-        // 1. Tabanı üret: stack: ..., num, den
-        c.append($a1.code);
-        // 2. Tabanı global değişkenlere kaydet
-        c.append("STOREG " + G_POW_BASE_DEN + "\n"); // base_den
-        c.append("STOREG " + G_POW_BASE_NUM + "\n"); // base_num
-        // 3. Üssü input'tan oku
-        c.append("READ\n");                            // ..., n
-        c.append("STOREG " + G_POW_EXP + "\n");        // exp = n, stack boş
-        // 4. Sonucu 1/1 ile başlat: res = 1/1
-        c.append("PUSHI 1\n");                         // num
-        c.append("PUSHI 1\n");                         // den
-        c.append("STOREG " + G_POW_RES_DEN + "\n");    // res_den
-        c.append("STOREG " + G_POW_RES_NUM + "\n");    // res_num
-        String L_CHECK = newLabel("POW_CHECK");
-        String L_END   = newLabel("POW_END");
-        // 5. Döngü: while (exp > 0) { res = res * base; exp--; }
-        c.append("LABEL " + L_CHECK + "\n");
-        // if exp == 0 -> get out
-        c.append("PUSHG " + G_POW_EXP + "\n");
-        c.append("PUSHI 0\n");
-        c.append("EQUAL\n");
-        c.append("JUMPT " + L_END + "\n");
-        // ---- res = res * base ----
-        // stack: ...
-        // push res (n1,d1)
-        c.append("PUSHG " + G_POW_RES_NUM + "\n");
-        c.append("PUSHG " + G_POW_RES_DEN + "\n");
-        // push base (n2,d2)
-        c.append("PUSHG " + G_POW_BASE_NUM + "\n");
-        c.append("PUSHG " + G_POW_BASE_DEN + "\n");
-        // şimdi stack: ..., n1,d1,n2,d2
-        // tmp'lere koy
-        c.append("STOREG " + G_TMP0 + "\n"); // d2
-        c.append("STOREG " + G_TMP1 + "\n"); // n2
-        c.append("STOREG " + G_TMP2 + "\n"); // d1
-        c.append("STOREG " + G_TMP3 + "\n"); // n1
-        // num_new = n1 * n2
-        c.append("PUSHG " + G_TMP3 + "\n");
-        c.append("PUSHG " + G_TMP1 + "\n");
-        c.append("MUL\n");
-        // den_new = d1 * d2
-        c.append("PUSHG " + G_TMP2 + "\n");
-        c.append("PUSHG " + G_TMP0 + "\n");
-        c.append("MUL\n");
-        // yeni sonucu res_num / res_den olarak kaydet
-        c.append("STOREG " + G_POW_RES_DEN + "\n");
-        c.append("STOREG " + G_POW_RES_NUM + "\n");
-        // exp--
-        c.append("PUSHG " + G_POW_EXP + "\n");
-        c.append("PUSHI 1\n");
-        c.append("SUB\n");
-        c.append("STOREG " + G_POW_EXP + "\n");
-        // tekrar kontrol
-        c.append("JUMP " + L_CHECK + "\n");
-        // 6. Döngü bitti -> sonucu stack'e koy
-        c.append("LABEL " + L_END + "\n");
-        c.append("PUSHG " + G_POW_RES_NUM + "\n");
-        c.append("PUSHG " + G_POW_RES_DEN + "\n");
-        $code = c.toString();
-      }
-    )?
-  ;
+	)?;
 
+boolOr
+	returns[String code]:
+	a = boolAnd { $code = $a.code; } (
+		'ou' b = boolAnd { $code = genOr($code, $b.code); }
+	)*;
 
+boolAnd
+	returns[String code]:
+	a = boolNot { $code = $a.code; } (
+		'et' b = boolNot { $code = genAnd($code, $b.code); }
+	)*;
 
-boolOr returns [String code]
-    : a=boolAnd              { $code = $a.code; }
-      ( 'ou' b=boolAnd       { $code = genOr($code, $b.code); } )*
-    ;
+boolNot
+	returns[String code]:
+	'non' b = boolNot { $code = genNot($b.code); }
+	| boolAtom { $code = $boolAtom.code; };
 
-boolAnd returns [String code]
-    : a=boolNot              { $code = $a.code; }
-      ( 'et' b=boolNot       { $code = genAnd($code, $b.code); } )*
-    ;
-
-boolNot returns [String code]
-    : 'non' b=boolNot        { $code = genNot($b.code); }
-    | boolAtom               { $code = $boolAtom.code; }
-    ;
-
-boolAtom returns [String code]
-    : 'true'
-      {
+boolAtom
+	returns[String code]:
+	'true' {
         $code = "PUSHI 1\n";
       }
-    | 'false'
-      {
+	| 'false' {
         $code = "PUSHI 0\n";
       }
-    | a1=arithmExpr op=LOGICOP a2=arithmExpr
-      {
+	| a1 = arithmExpr op = LOGICOP a2 = arithmExpr {
         $code = genCmp($a1.code, $op.getText(), $a2.code);
       }
-    | '(' e=expr ')'
-      {
+	| '(' e = expr ')' {
         // Parantez içinde herhangi bir expr (bool veya rat)
         $code = $e.code;
       }
-    | 'lire' '(' ')'
-      {
+	| 'lire' '(' ')' {
         StringBuilder c = new StringBuilder();
         c.append("READ\n");
         c.append("PUSHI 0\n");
         c.append("NEQ\n");
         $code = c.toString();
-      }
-    ;
-
+      };
 
 // ---------------- Lexer rules ----------------
-NEWLINE : '\r'? '\n';       // match newlines
-SEMICOLON : ';' ;           // match semicolons
+NEWLINE: '\r'? '\n'; // match newlines
+SEMICOLON: ';'; // match semicolons
 
-POW    : '**' ;            // $POW.getText()  | $POW.getType()
-MULDIV : ('*' | '/');      // $MULDIV.getText()  | $MULDIV.getType() 
-ADDSUB : ('+' | '-');      // $ADDSUB.getText()  | $ADDSUB.getType()
-INCDEC : '++' | '--' ;     // $INCDEC.getText()  | $INCDEC.getType()
-LOGICOP : ('==' | '<>' | '<' | '<=' | '>' | '>='); // $LOGICOP.getText()  | $LOGICOP.getType()
+POW: '**'; // $POW.getText()  | $POW.getType()
+MULDIV: ('*' | '/'); // $MULDIV.getText()  | $MULDIV.getType() 
+ADDSUB: ('+' | '-'); // $ADDSUB.getText()  | $ADDSUB.getType()
+INCDEC: '++' | '--'; // $INCDEC.getText()  | $INCDEC.getType()
+LOGICOP: ('==' | '<>' | '<' | '<=' | '>' | '>='); // $LOGICOP.getText()  | $LOGICOP.getType()
 
-ENTIER : ('0'..'9')+;       // match integers , all sequences of digits
+ENTIER: ('0' ..'9')+; // match integers , all sequences of digits
 
-TYPE : 'int' | 'bool' ;    // match types
-ID : [a-zA-Z_] [a-zA-Z0-9_]* ;// match identifiers
+TYPE: 'int' | 'bool'; // match types
+ID: [a-zA-Z_] [a-zA-Z0-9_]*; // match identifiers
 
-WS : (' '|'\t')+ -> skip;   // ignore spaces and tabs
+WS: (' ' | '\t')+ -> skip; // ignore spaces and tabs
 //UNMATCH : . -> skip;        // ignore any other character // -> il mange les paranthèses 
-
