@@ -1,14 +1,52 @@
+// Compilation : antlr4 Rationnel.g4
+// Execution   : javac Rationnel*.java
 
+// --- To run the parser on an input file ---
+// grun Rationnel start -tree
+
+//--- To run the parser and show tokens ---
+// grun Rationnel start -tokens
+
+// --- To run the parser with a GUI parse tree viewer ---
+// grun Rationnel start -gui
+
+
+// --- To generate MVaP code ---
+// grun Rationnel start < input.txt > out.mvap
+
+// --- To assemble the generated MVaP code ---
+// java MVaPAssembler out.mvap
+
+// --- To run the generated MVaP program ---
+// java CBaP out.mvap.cbap
+   
+// ---------- Notes on runtime representation ----------
 /*
-  Compilation : antlr4 ./Rationnel.g4 -o ./build/ & javac ./build/*.java
+  == Booleans on MVaP ==
+    false is 0
+    true is 1
+    Every boolean expression must leave exactly one integer on top of the stack: 0 or 1
   
-  Exécution : grun Rationnel 'start' -gui 
-  */
+  == Rationals on MVaP stack ==
+    Pick one representation and never change it.
+    
+    + A rational = two ints on the stack:
+      - [..., num, den] with den on top
 
-/*
- == Booleans on MVaP == false is 0 true is 1 Every boolean expression must leave exactly one integer
- on top of the stack: 0 or 1
+    + So after compiling a rational expression r, the stack ends as:
+      - ..., num(r), den(r)
+
+  == Temporary global cells ==
+  ecide now how many temp cells you want and what they’re for. 
+  
+  Example:
+      g0..g3 reserved for temp rationals:
+          g0, g1, g2, g3 = scratch for num/den during +, -, *, /, comparisons, etc.
+
+      Later you can add more if absolutely necessary, but start small.
+
  */
+
 
 grammar Rationnel;
 
@@ -43,6 +81,12 @@ grammar Rationnel;
     static final int G_POW_RES_NUM  = 6;
     static final int G_POW_RES_DEN  = 7;
     static final int G_POW_EXP      = 8;
+
+    // ---- extra gloabals for tmp (gcd/sim/round) ----
+    static final int G_TMP4 = 9;
+    static final int G_TMP5 = 10;
+    static final int G_TMP6 = 11;
+    static final int G_TMP7 = 12;
 
     // Later: we will generate at program start:
     // PUSHI 0   ; g0 = G_TMP0
@@ -86,101 +130,400 @@ grammar Rationnel;
     return c.toString();
 }
 
-String genOr(String c1, String c2) {
-    String L_EVAL_E2 = newLabel("OR_EVAL_E2");
-    String L_END     = newLabel("OR_END");
+  String genOr(String c1, String c2) {
+      String L_EVAL_E2 = newLabel("OR_EVAL_E2");
+      String L_END     = newLabel("OR_END");
+      StringBuilder c = new StringBuilder();
+
+      // Evaluate left operand
+      c.append(c1);                 // stack: ..., v1
+
+      // If v1 == 0, need to evaluate e2 (JUMPF pops v1 when it is 0)
+      c.append("JUMPF " + L_EVAL_E2 + "\n");
+
+      // Here: v1 != 0 (true) and has been popped
+      c.append("PUSHI 1\n");        // result = 1
+      c.append("JUMP " + L_END + "\n");
+
+      c.append("LABEL " + L_EVAL_E2 + "\n");
+      // v1 was 0 and has been popped; now evaluate e2
+      c.append(c2);                 // stack: ..., v2
+
+      c.append("LABEL " + L_END + "\n");
+      return c.toString();
+  }
+
+  String genNot(String inner) {
+      StringBuilder c = new StringBuilder();
+      c.append(inner);           // stack: ..., v
+      c.append("PUSHI 0\n");     // ..., v, 0
+      c.append("EQUAL\n");       // 1 iff v == 0
+      return c.toString();
+  }
+
+  String genCmp(String c1, String opText, String c2) {
+      StringBuilder c = new StringBuilder();
+      c.append(c1);  // ..., n1,d1
+      c.append(c2);  // ..., n1,d1,n2,d2
+
+      StringBuilder opCode = new StringBuilder();
+      // stack: ..., n1,d1,n2,d2
+      opCode.append("STOREG " + G_TMP0 + "\n"); // d2
+      opCode.append("STOREG " + G_TMP1 + "\n"); // n2
+      opCode.append("STOREG " + G_TMP2 + "\n"); // d1
+      opCode.append("STOREG " + G_TMP3 + "\n"); // n1
+
+      // cross products L = n1*d2, R = n2*d1
+      opCode.append("PUSHG " + G_TMP3 + "\n");
+      opCode.append("PUSHG " + G_TMP0 + "\n");
+      opCode.append("MUL\n"); // L
+
+      opCode.append("PUSHG " + G_TMP1 + "\n");
+      opCode.append("PUSHG " + G_TMP2 + "\n");
+      opCode.append("MUL\n"); // R
+
+      if (opText.equals("<")) {
+          opCode.append("INF\n");
+      } else if (opText.equals("<=")) {
+          opCode.append("INFEQ\n");
+      } else if (opText.equals(">")) {
+          opCode.append("SUP\n");
+      } else if (opText.equals(">=")) {
+          opCode.append("SUPEQ\n");
+      } else if (opText.equals("==")) {
+          opCode.append("EQUAL\n");
+      } else if (opText.equals("<>")) {
+          opCode.append("NEQ\n");
+      } else {
+          throw new RuntimeException("Unknown LOGICOP: " + opText);
+      }
+
+      c.append(opCode.toString());
+      return c.toString();
+  }
+
+  String genAbsTop() {
+    // stack: ..., x
+    // result: ..., |x|
+    String L_POS = newLabel("ABS_POS");
+    String L_END = newLabel("ABS_END");
     StringBuilder c = new StringBuilder();
 
-    // Evaluate left operand
-    c.append(c1);                 // stack: ..., v1
+    c.append("DUP\n");          // x, x
+    c.append("PUSHI 0\n");      // x, x, 0
+    c.append("INF\n");          // x, (x<0)
+    c.append("JUMPF " + L_POS + "\n"); // if false => x>=0, jump (pops bool)
 
-    // If v1 == 0, need to evaluate e2 (JUMPF pops v1 when it is 0)
-    c.append("JUMPF " + L_EVAL_E2 + "\n");
-
-    // Here: v1 != 0 (true) and has been popped
-    c.append("PUSHI 1\n");        // result = 1
+    // negative: turn x into -x
+    c.append("PUSHI -1\n");
+    c.append("MUL\n");
     c.append("JUMP " + L_END + "\n");
 
-    c.append("LABEL " + L_EVAL_E2 + "\n");
-    // v1 was 0 and has been popped; now evaluate e2
-    c.append(c2);                 // stack: ..., v2
+    c.append("LABEL " + L_POS + "\n");
+    // already positive, do nothing
 
     c.append("LABEL " + L_END + "\n");
     return c.toString();
-}
+  }
 
-String genNot(String inner) {
+  String genGcd(String aCode, String bCode) {
+    String L_LOOP = newLabel("GCD_LOOP");
+    String L_BODY = newLabel("GCD_BODY");
+    String L_END  = newLabel("GCD_END");
+
     StringBuilder c = new StringBuilder();
-    c.append(inner);           // stack: ..., v
-    c.append("PUSHI 0\n");     // ..., v, 0
-    c.append("EQUAL\n");       // 1 iff v == 0
-    return c.toString();
-}
 
-String genCmp(String c1, String opText, String c2) {
+    // push a then b
+    c.append(aCode);
+    c.append(bCode);
+
+    // store into globals: A=g_tmp4, B=g_tmp5
+    c.append("STOREG " + G_TMP5 + "\n"); // B
+    c.append("STOREG " + G_TMP4 + "\n"); // A
+
+    // A = abs(A), B = abs(B)
+    c.append("PUSHG " + G_TMP4 + "\n");
+    c.append(genAbsTop());
+    c.append("STOREG " + G_TMP4 + "\n");
+
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append(genAbsTop());
+    c.append("STOREG " + G_TMP5 + "\n");
+
+    // while (B != 0)
+    c.append("LABEL " + L_LOOP + "\n");
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append("PUSHI 0\n");
+    c.append("EQUAL\n");                 // (B==0)
+    c.append("JUMPF " + L_BODY + "\n");  // false => continue
+    c.append("JUMP " + L_END + "\n");    // true  => end
+
+    c.append("LABEL " + L_BODY + "\n");
+
+    // T = A % B
+    c.append("PUSHG " + G_TMP4 + "\n");  // A
+    c.append("PUSHG " + G_TMP5 + "\n");  // B
+    c.append("MOD\n");                   // A%B
+    c.append("STOREG " + G_TMP6 + "\n"); // T
+
+    // A = B
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append("STOREG " + G_TMP4 + "\n");
+
+    // B = T
+    c.append("PUSHG " + G_TMP6 + "\n");
+    c.append("STOREG " + G_TMP5 + "\n");
+
+    c.append("JUMP " + L_LOOP + "\n");
+
+    // end: push A
+    c.append("LABEL " + L_END + "\n");
+    c.append("PUSHG " + G_TMP4 + "\n");
+
+    return c.toString();
+  }
+
+
+  String genLcm(String aCode, String bCode) {
     StringBuilder c = new StringBuilder();
-    c.append(c1);  // ..., n1,d1
-    c.append(c2);  // ..., n1,d1,n2,d2
 
-    StringBuilder opCode = new StringBuilder();
-    // stack: ..., n1,d1,n2,d2
-    opCode.append("STOREG " + G_TMP0 + "\n"); // d2
-    opCode.append("STOREG " + G_TMP1 + "\n"); // n2
-    opCode.append("STOREG " + G_TMP2 + "\n"); // d1
-    opCode.append("STOREG " + G_TMP3 + "\n"); // n1
+    // Save originals
+    c.append(aCode);
+    c.append("STOREG " + G_TMP7 + "\n"); // A0
+    c.append(bCode);
+    c.append("STOREG " + G_TMP0 + "\n"); // B0
 
-    // cross products L = n1*d2, R = n2*d1
-    opCode.append("PUSHG " + G_TMP3 + "\n");
-    opCode.append("PUSHG " + G_TMP0 + "\n");
-    opCode.append("MUL\n"); // L
+    // Compute g = gcd(A0,B0) using tmp4/tmp5/tmp6
+    c.append("PUSHG " + G_TMP7 + "\n");
+    c.append("STOREG " + G_TMP4 + "\n");
+    c.append("PUSHG " + G_TMP0 + "\n");
+    c.append("STOREG " + G_TMP5 + "\n");
 
-    opCode.append("PUSHG " + G_TMP1 + "\n");
-    opCode.append("PUSHG " + G_TMP2 + "\n");
-    opCode.append("MUL\n"); // R
+    // A=abs(A), B=abs(B)
+    c.append("PUSHG " + G_TMP4 + "\n");
+    c.append(genAbsTop());
+    c.append("STOREG " + G_TMP4 + "\n");
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append(genAbsTop());
+    c.append("STOREG " + G_TMP5 + "\n");
 
-    if (opText.equals("<")) {
-        opCode.append("INF\n");
-    } else if (opText.equals("<=")) {
-        opCode.append("INFEQ\n");
-    } else if (opText.equals(">")) {
-        opCode.append("SUP\n");
-    } else if (opText.equals(">=")) {
-        opCode.append("SUPEQ\n");
-    } else if (opText.equals("==")) {
-        opCode.append("EQUAL\n");
-    } else if (opText.equals("<>")) {
-        opCode.append("NEQ\n");
-    } else {
-        throw new RuntimeException("Unknown LOGICOP: " + opText);
-    }
+    String L_LOOP = newLabel("LCM_GCD_LOOP");
+    String L_BODY = newLabel("LCM_GCD_BODY");
+    String L_END  = newLabel("LCM_GCD_END");
 
-    c.append(opCode.toString());
+    // while (B != 0)
+    c.append("LABEL " + L_LOOP + "\n");
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append("PUSHI 0\n");
+    c.append("EQUAL\n");                 // (B==0)
+    c.append("JUMPF " + L_BODY + "\n");  // false => continue
+    c.append("JUMP " + L_END + "\n");    // true  => end
+
+    c.append("LABEL " + L_BODY + "\n");
+
+    // T = A % B
+    c.append("PUSHG " + G_TMP4 + "\n");
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append("MOD\n");
+    c.append("STOREG " + G_TMP6 + "\n");
+
+    // A = B
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append("STOREG " + G_TMP4 + "\n");
+
+    // B = T
+    c.append("PUSHG " + G_TMP6 + "\n");
+    c.append("STOREG " + G_TMP5 + "\n");
+
+    c.append("JUMP " + L_LOOP + "\n");
+
+    // end: gcd is in A (=tmp4)
+    c.append("LABEL " + L_END + "\n");
+    c.append("PUSHG " + G_TMP4 + "\n");   // g
+    c.append("STOREG " + G_TMP6 + "\n");  // tmp6 = g
+
+    // l = abs((A0 / g) * B0)
+    c.append("PUSHG " + G_TMP7 + "\n");  // A0
+    c.append("PUSHG " + G_TMP6 + "\n");  // g
+    c.append("DIV\n");                   // A0/g
+
+    c.append("PUSHG " + G_TMP0 + "\n");  // B0
+    c.append("MUL\n");                   // (A0/g)*B0
+
+    c.append(genAbsTop());               // abs(l)
+
     return c.toString();
-}
+  }
+
+  String genSim(String ratCode) {
+      StringBuilder c = new StringBuilder();
+
+      // rat -> ..., num, den
+      c.append(ratCode);
+
+      // Save original den/num in safe temps (NOT used by genGcd)
+      c.append("STOREG " + G_TMP0 + "\n"); // den0
+      c.append("STOREG " + G_TMP1 + "\n"); // num0
+
+      // Prepare |num0| and |den0| in gcd temps (genGcd uses TMP4/TMP5/TMP6 internally)
+      c.append("PUSHG " + G_TMP1 + "\n");  // num0
+      c.append(genAbsTop());
+      c.append("STOREG " + G_TMP4 + "\n"); // A = abs(num0)
+
+      c.append("PUSHG " + G_TMP0 + "\n");  // den0
+      c.append(genAbsTop());
+      c.append("STOREG " + G_TMP5 + "\n"); // B = abs(den0)
+
+      // g = gcd(abs(num0), abs(den0))
+      c.append(genGcd("PUSHG " + G_TMP4 + "\n", "PUSHG " + G_TMP5 + "\n"));
+      c.append("STOREG " + G_TMP2 + "\n"); // g
+
+      // num = num0 / g
+      c.append("PUSHG " + G_TMP1 + "\n");
+      c.append("PUSHG " + G_TMP2 + "\n");
+      c.append("DIV\n");
+      c.append("STOREG " + G_TMP1 + "\n");
+
+      // den = den0 / g
+      c.append("PUSHG " + G_TMP0 + "\n");
+      c.append("PUSHG " + G_TMP2 + "\n");
+      c.append("DIV\n");
+      c.append("STOREG " + G_TMP0 + "\n");
+
+      // normalize sign: if den < 0 then num=-num, den=-den
+      String L_OK = newLabel("SIM_DEN_OK");
+      c.append("PUSHG " + G_TMP0 + "\n");
+      c.append("PUSHI 0\n");
+      c.append("INF\n");               // den < 0 ?
+      c.append("JUMPF " + L_OK + "\n");
+
+      // den negative
+      c.append("PUSHG " + G_TMP1 + "\n");
+      c.append("PUSHI -1\n");
+      c.append("MUL\n");
+      c.append("STOREG " + G_TMP1 + "\n");
+
+      c.append("PUSHG " + G_TMP0 + "\n");
+      c.append("PUSHI -1\n");
+      c.append("MUL\n");
+      c.append("STOREG " + G_TMP0 + "\n");
+
+      c.append("LABEL " + L_OK + "\n");
+
+      // push back num, den
+      c.append("PUSHG " + G_TMP1 + "\n");
+      c.append("PUSHG " + G_TMP0 + "\n");
+
+      return c.toString();
+  }
+
+
+  String genRoundNearestInt(String ratCode) {
+    // returns an int rational: k/1
+    String L_POS = newLabel("ROUND_POS");
+    StringBuilder c = new StringBuilder();
+
+    // stack: ..., num, den
+    c.append(ratCode);
+
+    c.append("STOREG " + G_TMP5 + "\n"); // den
+    c.append("STOREG " + G_TMP4 + "\n"); // num
+
+    // sign = (num < 0) ? 1 : 0   in tmp6
+    c.append("PUSHG " + G_TMP4 + "\n");
+    c.append("PUSHI 0\n");
+    c.append("INF\n");
+    c.append("STOREG " + G_TMP6 + "\n"); // sign
+
+    // numAbs -> tmp4
+    c.append("PUSHG " + G_TMP4 + "\n");
+    c.append(genAbsTop());
+    c.append("STOREG " + G_TMP4 + "\n");
+
+    // denAbs -> tmp5
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append(genAbsTop());
+    c.append("STOREG " + G_TMP5 + "\n");
+
+    // k = (numAbs + denAbs/2) / denAbs
+    // compute denAbs/2
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append("PUSHI 2\n");
+    c.append("DIV\n");                 // denAbs/2
+
+    c.append("PUSHG " + G_TMP4 + "\n"); // numAbs
+    c.append("ADD\n");                  // numAbs + denAbs/2
+
+    c.append("PUSHG " + G_TMP5 + "\n"); // denAbs
+    c.append("DIV\n");                  // k (positive)
+    c.append("STOREG " + G_TMP7 + "\n"); // k
+
+    // if sign==1 => k = -k
+    c.append("PUSHG " + G_TMP6 + "\n");
+    c.append("JUMPF " + L_POS + "\n");
+    c.append("PUSHG " + G_TMP7 + "\n");
+    c.append("PUSHI -1\n");
+    c.append("MUL\n");
+    c.append("STOREG " + G_TMP7 + "\n");
+    c.append("LABEL " + L_POS + "\n");
+
+    // return k/1
+    c.append("PUSHG " + G_TMP7 + "\n");
+    c.append("PUSHI 1\n");
+
+    return c.toString();
+  }
+
+
+  String genNormalizeDenSign() {
+    // stack: ..., num, den
+    // ensure den > 0 (if den<0 then num=-num, den=-den)
+    String L_OK = newLabel("DEN_OK");
+    StringBuilder c = new StringBuilder();
+
+    c.append("STOREG " + G_TMP5 + "\n"); // den
+    c.append("STOREG " + G_TMP4 + "\n"); // num
+
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append("PUSHI 0\n");
+    c.append("INF\n");                   // den < 0 ?
+    c.append("JUMPF " + L_OK + "\n");
+
+    c.append("PUSHG " + G_TMP4 + "\n");
+    c.append("PUSHI -1\n");
+    c.append("MUL\n");
+    c.append("STOREG " + G_TMP4 + "\n");
+
+    c.append("PUSHG " + G_TMP5 + "\n");
+    c.append("PUSHI -1\n");
+    c.append("MUL\n");
+    c.append("STOREG " + G_TMP5 + "\n");
+
+    c.append("LABEL " + L_OK + "\n");
+    c.append("PUSHG " + G_TMP4 + "\n"); // num
+    c.append("PUSHG " + G_TMP5 + "\n"); // den
+
+    return c.toString();
+  }
+
+
+
+  
 
 }
 
-// ----------------------------------------------
 // ---------------- Parser rules ----------------
-
-
-start: (instruction (SEMICOLON | NEWLINE)*)* EOF {
-        StringBuilder prog = new StringBuilder();
-
-        // Reserve temp globals (g0..g3)
-        prog.append("ALLOC 9\n\n"); // reserve space for 9 temp globals
-        // g0 = G_TMP0
-        // g1 = G_TMP1
-        // g2 = G_TMP2
-        // g3 = G_TMP3
-
-        prog.append(code.toString());  // body generated by instructions
-
-        prog.append("FREE 9\n"); // free temp globals
-        prog.append("HALT\n");
-
-        System.out.println(prog.toString());
-      };
+start
+      : ((SEMICOLON | NEWLINE)* instruction (SEMICOLON | NEWLINE)*)* EOF
+    {
+      StringBuilder prog = new StringBuilder();
+      prog.append("ALLOC 20\n\n");
+      prog.append(code.toString());
+      prog.append("FREE 20\n");
+      prog.append("HALT\n");
+      System.out.println(prog.toString());
+    }
+  ;
 
 instruction
     : 'Afficher' '(' e=expr ')'
@@ -195,9 +538,9 @@ instruction
             emit("WRITE");
             emit("POP");
         } else if ($e.exprType.equals("int")) {
-            emit("POP");
-            emit("WRITE");
-            emit("POP");
+            emit("POP");   // drop den (=1)
+            emit("WRITE"); // print num
+            emit("POP");   // drop num  
         } else if ($e.exprType.equals("rat")) {
             emit("STOREG " + G_TMP0);
             emit("WRITE");
@@ -208,8 +551,8 @@ instruction
         } else {
             throw new RuntimeException("Unknown expr type: " + $e.exprType);
         }
-      };
-
+      }
+    ;
 
 
 // Combined expressions
@@ -260,6 +603,9 @@ arithmExpr returns [String code, String exprType]
           opCode.append("PUSHG " + G_TMP0 + "\n");
           opCode.append("MUL\n");
 
+          // NOW stack is: ..., num, den  (den on top)
+          opCode.append(genNormalizeDenSign());
+
           c.append(opCode.toString());
           $code = c.toString();
 
@@ -270,7 +616,8 @@ arithmExpr returns [String code, String exprType]
               $exprType = "rat";
           }
         }
-	)*;
+      )*
+    ;
 
 arithmTerm returns [String code, String exprType]
     : f1=arithmPow
@@ -296,10 +643,13 @@ arithmTerm returns [String code, String exprType]
           c.append("PUSHG " + G_TMP0 + "\n");
           c.append("MUL\n");
 
+          c.append(genNormalizeDenSign());
+
           $code = c.toString();
           $exprType = "rat";  // çünkü bölme
         }
-		| op = MULDIV f2 = arithmPow {
+      | op=MULDIV f2=arithmPow
+        {
           StringBuilder c = new StringBuilder();
           c.append($code);
           c.append($f2.code);
@@ -343,10 +693,13 @@ arithmTerm returns [String code, String exprType]
               $exprType = "rat";
           }
 
+          opCode.append(genNormalizeDenSign());
+
           c.append(opCode.toString());
           $code = c.toString();
         }
-	)*;
+      )*
+    ;
 
 
 arithmAtom returns [String code, String exprType]
@@ -371,8 +724,29 @@ arithmAtom returns [String code, String exprType]
         $code = c.toString();
         $exprType = "int";
       }
-	| ADDSUB a = arithmAtom // unary + / -
-	{
+     | 'pgcd' '(' ia=intExpr COMMA ib=intExpr ')'
+      {
+        StringBuilder c = new StringBuilder();
+        c.append(genGcd($ia.code, $ib.code)); // ..., gcd
+        c.append("PUSHI 1\n");                // ..., gcd, 1
+        $code = c.toString();
+        $exprType = "int";
+      }
+
+    | 'ppcm' '(' ia=intExpr COMMA ib=intExpr ')'
+      {
+        StringBuilder c = new StringBuilder();
+        c.append(genLcm($ia.code, $ib.code)); // ..., lcm
+        c.append("PUSHI 1\n");                // ..., lcm, 1
+        $code = c.toString();
+        $exprType = "int";
+      }
+    | 'sim' '(' r=arithmExpr ')' // simplify 
+      { $code = genSim($r.code); $exprType = "rat"; }
+    | LBRACK r=arithmExpr RBRACK // round to nearest int
+      { $code = genRoundNearestInt($r.code); $exprType = "int"; }
+    | ADDSUB a=arithmAtom      // unary + / -
+      {
         String op = $ADDSUB.getText();
         StringBuilder c = new StringBuilder();
         c.append($a.code);           // ..., num, den
@@ -389,13 +763,12 @@ arithmAtom returns [String code, String exprType]
         // unary + veya - tipi değiştirmez
         $exprType = $a.exprType;
       }
-    | ENTIER '/' ENTIER    // rational literal: a/b
+    | x=signedInt '/' y=signedInt
       {
-        String a = $ENTIER(0).getText();
-        String b = $ENTIER(1).getText();
         StringBuilder c = new StringBuilder();
-        c.append("PUSHI ").append(a).append("\n");
-        c.append("PUSHI ").append(b).append("\n");
+        c.append($x.code);              // num
+        c.append($y.code);              // den
+        c.append(genNormalizeDenSign()); // den>0
         $code = c.toString();
         $exprType = "rat";
       }
@@ -416,7 +789,10 @@ arithmAtom returns [String code, String exprType]
       }
     | 'lire' '(' ')'   // rational read
       {
-        $code = "READ\nREAD\n";   // num, den
+        StringBuilder c = new StringBuilder();
+        c.append("READ \nREAD \n");          // num, den
+        c.append(genNormalizeDenSign());
+        $code = c.toString();
         $exprType = "rat";
       }
     ;
@@ -484,25 +860,18 @@ arithmPow returns [String code, String exprType]
           c.append("STOREG " + G_POW_BASE_DEN + "\n");
           c.append("STOREG " + G_POW_BASE_NUM + "\n");
 
-          // read exp
+          // read exponent
           c.append("READ\n");
           c.append("STOREG " + G_POW_EXP + "\n");   // stack empty
 
-          // ---- reject negative exponent safely (stack-clean) ----
-          String L_EXP_OK  = newLabel("POW_EXP_OK");
-          String L_EXP_BAD = newLabel("POW_EXP_BAD");
+          // ---- reject negative exponent safely ----
+          String L_EXP_OK = newLabel("POW_EXP_OK");
 
           c.append("PUSHG " + G_POW_EXP + "\n");
           c.append("PUSHI 0\n");
-          c.append("INF\n");                        // (exp < 0) ? 1 : 0
-          c.append("STOREG " + G_TMP0 + "\n");      // pop -> stack empty
-
-          c.append("PUSHG " + G_TMP0 + "\n");
-          c.append("JUMPT " + L_EXP_BAD + "\n");    // if negative -> bad
-          c.append("JUMP " + L_EXP_OK + "\n");
-
-          c.append("LABEL " + L_EXP_BAD + "\n");
-          c.append("HALT\n");
+          c.append("INF\n");                        // exp < 0 ?
+          c.append("JUMPF " + L_EXP_OK + "\n");     // false => exp >= 0
+          c.append("HALT\n");                       // true  => exp < 0
 
           c.append("LABEL " + L_EXP_OK + "\n");
 
@@ -513,14 +882,18 @@ arithmPow returns [String code, String exprType]
           c.append("STOREG " + G_POW_RES_NUM + "\n");
 
           String L_CHECK = newLabel("POW_CHECK");
+          String L_BODY  = newLabel("POW_BODY");
           String L_END   = newLabel("POW_END");
 
           // while (exp != 0)
           c.append("LABEL " + L_CHECK + "\n");
           c.append("PUSHG " + G_POW_EXP + "\n");
           c.append("PUSHI 0\n");
-          c.append("EQUAL\n");
-          c.append("JUMPT " + L_END + "\n");        // exp == 0 -> end
+          c.append("EQUAL\n");                      // exp == 0 ?
+          c.append("JUMPF " + L_BODY + "\n");       // false => continue
+          c.append("JUMP " + L_END + "\n");         // true  => end
+
+          c.append("LABEL " + L_BODY + "\n");
 
           // res = res * base
           c.append("PUSHG " + G_POW_RES_NUM + "\n");
@@ -560,35 +933,69 @@ arithmPow returns [String code, String exprType]
           $code = c.toString();
           $exprType = "rat";
         }
-      )?   
+      )*
     ;
 
-boolOr
-	returns[String code]:
-	a = boolAnd { $code = $a.code; } (
-		'ou' b = boolAnd { $code = genOr($code, $b.code); }
-	)*;
-  
-boolAnd
-	returns[String code]:
-	a = boolNot { $code = $a.code; } (
-		'et' b = boolNot { $code = genAnd($code, $b.code); }
-	)*;
+intExpr returns [String code]
+  : s=signedInt
+    { $code = $s.code; }
+  | 'num' '(' r=arithmExpr ')'
+    {
+      StringBuilder c = new StringBuilder();
+      c.append($r.code);
+      c.append("STOREG " + G_TMP0 + "\n"); // pop den, stack: ..., num
+      $code = c.toString();
+    }
+  | 'denum' '(' r=arithmExpr ')'
+    {
+      StringBuilder c = new StringBuilder();
+      c.append($r.code);
+      c.append("STOREG " + G_TMP0 + "\n"); // pop den
+      c.append("POP\n");                   // pop num
+      c.append("PUSHG " + G_TMP0 + "\n");  // push den
+      $code = c.toString();
+    }
+  | 'pgcd' '(' a=intExpr COMMA b=intExpr ')'
+    { $code = genGcd($a.code, $b.code); }
+  | 'ppcm' '(' a=intExpr COMMA b=intExpr ')'
+    { $code = genLcm($a.code, $b.code); }
+  ;
 
-boolNot
-	returns[String code]:
-	'non' b = boolNot { $code = genNot($b.code); }
-	| boolAtom { $code = $boolAtom.code; };
+signedInt returns [String code]
+  : ADDSUB? ENTIER
+    {
+      String s = ($ADDSUB != null) ? $ADDSUB.getText() : "";
+      $code = "PUSHI " + s + $ENTIER.getText() + "\n";
+    }
+  ;
 
-boolAtom
-	returns[String code]:
-	'true' {
+
+boolOr returns [String code]
+    : a=boolAnd              { $code = $a.code; }
+      ( 'ou' b=boolAnd       { $code = genOr($code, $b.code); } )*
+    ;
+
+boolAnd returns [String code]
+    : a=boolNot              { $code = $a.code; }
+      ( 'et' b=boolNot       { $code = genAnd($code, $b.code); } )*
+    ;
+
+boolNot returns [String code]
+    : 'non' b=boolNot        { $code = genNot($b.code); }
+    | boolAtom               { $code = $boolAtom.code; }
+    ;
+
+boolAtom returns [String code]
+    : 'true'
+      {
         $code = "PUSHI 1\n";
       }
-	| 'false' {
+    | 'false'
+      {
         $code = "PUSHI 0\n";
       }
-	| a1 = arithmExpr op = LOGICOP a2 = arithmExpr {
+    | a1=arithmExpr op=LOGICOP a2=arithmExpr
+      {
         $code = genCmp($a1.code, $op.getText(), $a2.code);
       }
     | '(' b=boolOr ')'
@@ -600,11 +1007,13 @@ boolAtom
         c.append("PUSHI 0\n");
         c.append("NEQ\n");
         $code = c.toString();
-      };
+      }
+    ;
+
 
 // ---------------- Lexer rules ----------------
-NEWLINE: '\r'? '\n'; // match newlines
-SEMICOLON: ';'; // match semicolons
+NEWLINE : '\r'? '\n';       // match newlines
+SEMICOLON : ';' ;           // match semicolons
 
 POW    : '**' ;            // $POW.getText()  | $POW.getType()
 MULDIV : ('*' | '/');      // $MULDIV.getText()  | $MULDIV.getType() 
@@ -612,8 +1021,15 @@ ADDSUB : ('+' | '-');      // $ADDSUB.getText()  | $ADDSUB.getType()
 
 LOGICOP : ('==' | '<>' | '<' | '<=' | '>' | '>='); // $LOGICOP.getText()  | $LOGICOP.getType()
 
-ENTIER: ('0' ..'9')+; // match integers , all sequences of digits
+ENTIER : ('0'..'9')+;       // match integers , all sequences of digits
 
+LBRACK : '[' ; 
+RBRACK : ']' ;
+COMMA  : ',' ;
+
+LINE_COMMENT : '//' ~[\r\n]* -> skip ;
 
 WS : (' '|'\t')+ -> skip;   // ignore spaces and tabs
 //UNMATCH : . -> skip;        // ignore any other character // -> il mange les paranthèses 
+
+
