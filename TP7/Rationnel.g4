@@ -129,14 +129,14 @@ soit un bloc d’instructions. Par exemple le code source suivant devrait être 
 */
 
 struc_conditionnel
-  : cond=boolexpr '?' thenInstr=instruction ( ':' elseInstr=instruction )
+  : cond=boolexpr '?' thenInstr=code ( ':' elseInstr=code )
   {
     // Generate code for conditional structure TODO
     
     String elseLabel = newLabel("else");
     String endLabel = newLabel("end_if");
 
-    // Evaluate condition
+    // Evaluate condition in MVaP
     if ( !$cond.value )
     {
         // Jump to else part if condition is false
@@ -155,6 +155,7 @@ struc_conditionnel
 
     emit(endLabel + ":");
   }
+
   | cond=boolexpr '?' thenInstr=instruction 
   {
     // Generate code for conditional structure
@@ -218,6 +219,7 @@ boucle
 
     emit(endLabel + ":");
   }
+  
   | 'Pour' 'index=' index= ENTIER '..' fin= ENTIER 'Faire' body=code
   {
     // Generate code for for loop
