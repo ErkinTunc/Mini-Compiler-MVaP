@@ -1,0 +1,10 @@
+{
+    int x;
+    x = 100;
+    {
+        int y;
+        y = 50;
+        Afficher y
+    }
+    Afficher x
+}

@@ -1,0 +1,15 @@
+
+PUSHI 3
+STORE 0
+repeat_start_0:
+LOAD 0
+PUSHI 1
+ADD
+STORE 0
+LOAD 0
+PUSHI 15
+EQUAL
+JUMPF repeat_start_0
+LOAD 0
+
+HALT

@@ -1,0 +1,8 @@
+{
+int x;
+x= 3;
+repeter 
+    x=x+1 
+jusque x == 15;
+Afficher x
+}
