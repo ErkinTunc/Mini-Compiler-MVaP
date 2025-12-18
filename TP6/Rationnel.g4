@@ -731,6 +731,16 @@ arithmAtom
 	{ $code = genSim($r.code); $exprType = "rat"; }
 	| LBRACK r = arithmExpr RBRACK // round to nearest int
 	{ $code = genRoundNearestInt($r.code); $exprType = "int"; }
+  | x=signedInt DIV y=signedInt
+  {
+    StringBuilder c = new StringBuilder();
+    c.append($x.code);
+    c.append($y.code);
+    c.append(genAssertNonZeroTop());  // y != 0
+    c.append(genNormalizeDenSign());  // den > 0
+    $code = c.toString();
+    $exprType = "rat";
+  }
 	| ADDSUB a = arithmAtom // unary + / -
 	{
         String op = $ADDSUB.getText();
@@ -749,15 +759,6 @@ arithmAtom
         // unary + veya - tipi değiştirmez
         $exprType = $a.exprType;
       }
-	| x = signedInt DIV y = signedInt {
-    StringBuilder c = new StringBuilder();
-    c.append($x.code);
-    c.append($y.code);
-    c.append(genAssertNonZeroTop());
-    c.append(genNormalizeDenSign());
-    $code = c.toString();
-    $exprType = "rat";
-  }
 	| ENTIER // integer literal: n  -> n/1
 	{
         String n = $ENTIER.getText();
@@ -772,14 +773,14 @@ arithmAtom
         $exprType = $e.exprType;
       }
 	| 'lire' '(' ')' {
-    
-      StringBuilder c = new StringBuilder();
-      c.append("READ\nREAD\n");
-      c.append(genAssertNonZeroTop());
-      c.append(genNormalizeDenSign());
-      $code = c.toString();
-      $exprType = "rat";
-  };
+    StringBuilder c = new StringBuilder();
+    c.append("READ\nREAD\n");          // num, den
+    c.append(genAssertNonZeroTop());   // den != 0
+    c.append(genNormalizeDenSign());   // den > 0
+    $code = c.toString();
+    $exprType = "rat";
+  }
+  ;
 
 arithmPow
 	returns[String code, String exprType]:
