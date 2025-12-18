@@ -1,52 +1,35 @@
-// Compilation : antlr4 Rationnel.g4
-// Execution   : javac Rationnel*.java
+// Compilation : antlr4 Rationnel.g4             Execution : javac Rationnel*.java
 
-// --- To run the parser on an input file ---
-// grun Rationnel start -tree
+// --- To run the parser on an input file --- grun Rationnel start -tree
 
-//--- To run the parser and show tokens ---
-// grun Rationnel start -tokens
+//--- To run the parser and show tokens --- grun Rationnel start -tokens
 
-// --- To run the parser with a GUI parse tree viewer ---
-// grun Rationnel start -gui
+// --- To run the parser with a GUI parse tree viewer --- grun Rationnel start -gui
 
+// --- To generate MVaP code --- grun Rationnel start < input.txt > out.mvap
 
-// --- To generate MVaP code ---
-// grun Rationnel start < input.txt > out.mvap
+// --- To assemble the generated MVaP code --- java MVaPAssembler out.mvap
 
-// --- To assemble the generated MVaP code ---
-// java MVaPAssembler out.mvap
+// --- To run the generated MVaP program --- java CBaP out.mvap.cbap
 
-// --- To run the generated MVaP program ---
-// java CBaP out.mvap.cbap
-   
 // ---------- Notes on runtime representation ----------
 /*
-  == Booleans on MVaP ==
-    false is 0
-    true is 1
-    Every boolean expression must leave exactly one integer on top of the stack: 0 or 1
-  
-  == Rationals on MVaP stack ==
-    Pick one representation and never change it.
-    
-    + A rational = two ints on the stack:
-      - [..., num, den] with den on top
-
-    + So after compiling a rational expression r, the stack ends as:
-      - ..., num(r), den(r)
-
-  == Temporary global cells ==
-  ecide now how many temp cells you want and what they’re for. 
-  
-  Example:
-      g0..g3 reserved for temp rationals:
-          g0, g1, g2, g3 = scratch for num/den during +, -, *, /, comparisons, etc.
-
-      Later you can add more if absolutely necessary, but start small.
-
+ == Booleans on MVaP == false is 0 true is 1 Every boolean expression must leave exactly one integer
+ on top of the stack: 0 or 1
+ 
+ == Rationals on MVaP stack == Pick one representation and never change it.
+ 
+ + A rational = two ints on the stack: - [..., num, den] with den on top
+ 
+ + So after compiling a rational expression r, the stack ends as: - ..., num(r), den(r)
+ 
+ == Temporary global cells == ecide now how many temp cells you want and what they’re for.
+ 
+ Example: g0..g3 reserved for temp rationals: g0, g1, g2, g3 = scratch for num/den during +, -, *,
+ /, comparisons, etc.
+ 
+ Later you can add more if absolutely necessary, but start small.
  */
-
 
 grammar Rationnel;
 
@@ -97,6 +80,116 @@ grammar Rationnel;
 
     StringBuilder code = new StringBuilder();  // holds the MVaP body
 
+  // ---------- Rational operations code generation ----------
+  String genAddRat(String c1, String c2) {
+    StringBuilder c = new StringBuilder();
+    c.append(c1); // ..., n1, d1
+    c.append(c2); // ..., n1, d1, n2, d2
+
+    c.append("STOREG " + G_TMP0 + "\n"); // d2
+    c.append("STOREG " + G_TMP1 + "\n"); // n2
+    c.append("STOREG " + G_TMP2 + "\n"); // d1
+    c.append("STOREG " + G_TMP3 + "\n"); // n1
+
+    // num = n1*d2 + n2*d1
+    c.append("PUSHG " + G_TMP3 + "\n");
+    c.append("PUSHG " + G_TMP0 + "\n");
+    c.append("MUL\n");
+    c.append("PUSHG " + G_TMP1 + "\n");
+    c.append("PUSHG " + G_TMP2 + "\n");
+    c.append("MUL\n");
+    c.append("ADD\n");
+
+    // den = d1*d2
+    c.append("PUSHG " + G_TMP2 + "\n");
+    c.append("PUSHG " + G_TMP0 + "\n");
+    c.append("MUL\n");
+
+    c.append(genNormalizeDenSign());
+    return c.toString();
+  }
+
+  String genSubRat(String c1, String c2) {
+    StringBuilder c = new StringBuilder();
+    c.append(c1);
+    c.append(c2);
+
+    c.append("STOREG " + G_TMP0 + "\n"); // d2
+    c.append("STOREG " + G_TMP1 + "\n"); // n2
+    c.append("STOREG " + G_TMP2 + "\n"); // d1
+    c.append("STOREG " + G_TMP3 + "\n"); // n1
+
+    // num = n1*d2 - n2*d1
+    c.append("PUSHG " + G_TMP3 + "\n");
+    c.append("PUSHG " + G_TMP0 + "\n");
+    c.append("MUL\n");
+    c.append("PUSHG " + G_TMP1 + "\n");
+    c.append("PUSHG " + G_TMP2 + "\n");
+    c.append("MUL\n");
+    c.append("SUB\n");
+
+    // den = d1*d2
+    c.append("PUSHG " + G_TMP2 + "\n");
+    c.append("PUSHG " + G_TMP0 + "\n");
+    c.append("MUL\n");
+
+    c.append(genNormalizeDenSign());
+    return c.toString();
+  }
+
+  String genMulRat(String c1, String c2) {
+    StringBuilder c = new StringBuilder();
+    c.append(c1);
+    c.append(c2);
+
+    c.append("STOREG " + G_TMP0 + "\n"); // d2
+    c.append("STOREG " + G_TMP1 + "\n"); // n2
+    c.append("STOREG " + G_TMP2 + "\n"); // d1
+    c.append("STOREG " + G_TMP3 + "\n"); // n1
+
+    // num = n1*n2
+    c.append("PUSHG " + G_TMP3 + "\n");
+    c.append("PUSHG " + G_TMP1 + "\n");
+    c.append("MUL\n");
+
+    // den = d1*d2
+    c.append("PUSHG " + G_TMP2 + "\n");
+    c.append("PUSHG " + G_TMP0 + "\n");
+    c.append("MUL\n");
+
+    c.append(genNormalizeDenSign());
+    return c.toString();
+  }
+
+  String genDivRat(String c1, String c2) {
+    StringBuilder c = new StringBuilder();
+    c.append(c1);
+    c.append(c2);
+
+    c.append("STOREG " + G_TMP0 + "\n"); // d2
+    c.append("STOREG " + G_TMP1 + "\n"); // n2
+    c.append("STOREG " + G_TMP2 + "\n"); // d1
+    c.append("STOREG " + G_TMP3 + "\n"); // n1
+
+    // assert n2 != 0
+    c.append("PUSHG " + G_TMP1 + "\n");
+    c.append(genAssertNonZeroTop());
+    c.append("POP\n");
+
+    // num = n1*d2
+    c.append("PUSHG " + G_TMP3 + "\n");
+    c.append("PUSHG " + G_TMP0 + "\n");
+    c.append("MUL\n");
+
+    // den = d1*n2
+    c.append("PUSHG " + G_TMP2 + "\n");
+    c.append("PUSHG " + G_TMP1 + "\n");
+    c.append("MUL\n");
+
+    c.append(genNormalizeDenSign());
+    return c.toString();
+  }
+// ----------- Code generation helpers ----------
     int labelCounter = 0;
     String newLabel(String base) {
         return base + "_" + (labelCounter++);
@@ -513,22 +606,20 @@ String genAssertNonZeroTop() {
 }
 
 // ---------------- Parser rules ----------------
-start
-      : ((SEMICOLON | NEWLINE)* instruction (SEMICOLON | NEWLINE)*)* EOF
-    {
+start: (
+		(SEMICOLON | NEWLINE)* instruction (SEMICOLON | NEWLINE)*
+	)* EOF {
       StringBuilder prog = new StringBuilder();
-      prog.append("ALLOC 20\n\n");
+      prog.append("ALLOC 13\n\n");
       prog.append(code.toString());
 
-      prog.append("FREE 20\n");
+      prog.append("FREE 13\n");
       prog.append("HALT\n");
       System.out.println(prog.toString());
-    }
-  ;
+    };
 
-instruction
-    : 'Afficher' '(' e=expr ')'
-      {
+instruction:
+	'Afficher' '(' e = expr ')' {
         emit($e.code);
 
         if ($e.exprType == null) {
@@ -553,164 +644,57 @@ instruction
             throw new RuntimeException("Unknown expr type: " + $e.exprType);
         }
 
-      }
-    ;
-
+      };
 
 // Combined expressions
-expr returns [String code, String exprType]
-    : b=boolOr      { $code = $b.code; $exprType = "bool"; }
-    | a=arithmExpr  { $code = $a.code; $exprType = $a.exprType; }
-    ;
-
+expr
+	returns[String code, String exprType]:
+	b = boolOr { $code = $b.code; $exprType = "bool"; }
+	| a = arithmExpr { $code = $a.code; $exprType = $a.exprType; };
 
 // Arithmetic expressions:  unary +/- > * / > + -
-arithmExpr returns [String code, String exprType]
-    : t1=arithmTerm
-      {
+arithmExpr
+	returns[String code, String exprType]:
+	t1 = arithmTerm {
         $code = $t1.code;
         $exprType = $t1.exprType;
-      }
-      ( op=ADDSUB t2=arithmTerm
-        {
-          StringBuilder c = new StringBuilder();
-          c.append($code);
-          c.append($t2.code);
-
-          StringBuilder opCode = new StringBuilder();
-          opCode.append("STOREG " + G_TMP0 + "\n"); // d2
-          opCode.append("STOREG " + G_TMP1 + "\n"); // n2
-          opCode.append("STOREG " + G_TMP2 + "\n"); // d1
-          opCode.append("STOREG " + G_TMP3 + "\n"); // n1
-
+      } (
+		op = ADDSUB t2 = arithmTerm {
           if ($op.getText().equals("+")) {
-              opCode.append("PUSHG " + G_TMP3 + "\n");
-              opCode.append("PUSHG " + G_TMP0 + "\n");
-              opCode.append("MUL\n");
-              opCode.append("PUSHG " + G_TMP1 + "\n");
-              opCode.append("PUSHG " + G_TMP2 + "\n");
-              opCode.append("MUL\n");
-              opCode.append("ADD\n");
+            $code = genAddRat($code, $t2.code);
           } else {
-              opCode.append("PUSHG " + G_TMP3 + "\n");
-              opCode.append("PUSHG " + G_TMP0 + "\n");
-              opCode.append("MUL\n");
-              opCode.append("PUSHG " + G_TMP1 + "\n");
-              opCode.append("PUSHG " + G_TMP2 + "\n");
-              opCode.append("MUL\n");
-              opCode.append("SUB\n");
+            $code = genSubRat($code, $t2.code);
           }
 
-          opCode.append("PUSHG " + G_TMP2 + "\n");
-          opCode.append("PUSHG " + G_TMP0 + "\n");
-          opCode.append("MUL\n");
-
-          // NOW stack is: ..., num, den  (den on top)
-          opCode.append(genNormalizeDenSign());
-
-          c.append(opCode.toString());
-          $code = c.toString();
-
-          // doğru tip çıkarımı: sol (güncel) + sağ (t2)
           if ($exprType.equals("int") && $t2.exprType.equals("int")) {
-              $exprType = "int";
+            $exprType = "int";
           } else {
-              $exprType = "rat";
+            $exprType = "rat";
           }
         }
-      )*
-    ;
+	)*;
 
-arithmTerm returns [String code, String exprType]
-    : f1=arithmPow
-      {
+arithmTerm
+	returns[String code, String exprType]:
+	f1 = arithmPow {
         $code = $f1.code;
         $exprType = $f1.exprType;
-      }
-      ( '/' 'lire' '(' ')'
-        {
-          StringBuilder c = new StringBuilder();
-          c.append($code);          // n1, d1
-
-          c.append("READ\n");       // n
-
-          c.append("STOREG " + G_TMP0 + "\n"); // n
-          c.append("STOREG " + G_TMP2 + "\n"); // d1
-          c.append("STOREG " + G_TMP3 + "\n"); // n1
-
-          // num = n1
-          c.append("PUSHG " + G_TMP3 + "\n");
-          // den = d1 * n
-          c.append("PUSHG " + G_TMP2 + "\n");
-          c.append("PUSHG " + G_TMP0 + "\n");
-          c.append("MUL\n");
-
-          c.append(genNormalizeDenSign());
-
-          $code = c.toString();
-          $exprType = "rat";  // çünkü bölme
-        }
-      | op=MULDIV f2=arithmPow
-        {
-          StringBuilder c = new StringBuilder();
-          c.append($code);
-          c.append($f2.code);
-
-          StringBuilder opCode = new StringBuilder();
-          // stack: ..., n1,d1,n2,d2
-          opCode.append("STOREG " + G_TMP0 + "\n"); // d2
-          opCode.append("STOREG " + G_TMP1 + "\n"); // n2
-          opCode.append("STOREG " + G_TMP2 + "\n"); // d1
-          opCode.append("STOREG " + G_TMP3 + "\n"); // n1
-
+      } (
+		op = (MUL | DIV) f2 = arithmPow {
           if ($op.getText().equals("*")) {
-              // num = n1*n2
-              opCode.append("PUSHG " + G_TMP3 + "\n");
-              opCode.append("PUSHG " + G_TMP1 + "\n");
-              opCode.append("MUL\n");
-
-              // den = d1*d2
-              opCode.append("PUSHG " + G_TMP2 + "\n");
-              opCode.append("PUSHG " + G_TMP0 + "\n");
-              opCode.append("MUL\n");
-
-              if ($exprType.equals("int") && $f2.exprType.equals("int")) $exprType = "int";
-              else $exprType = "rat";
-
-              // burada assert koyma (den zaten normalize edilerek >0 olmalı)
-
-          } else { // '/'
-              // ASSERT n2 != 0  (division by zero check)
-              opCode.append("PUSHG " + G_TMP1 + "\n");   // n2
-              opCode.append(genAssertNonZeroTop());      // keeps n2
-              opCode.append("POP\n");                    // discard n2 (we only checked)
-
-              // num = n1*d2
-              opCode.append("PUSHG " + G_TMP3 + "\n");
-              opCode.append("PUSHG " + G_TMP0 + "\n");
-              opCode.append("MUL\n");
-
-              // den = d1*n2
-              opCode.append("PUSHG " + G_TMP2 + "\n");
-              opCode.append("PUSHG " + G_TMP1 + "\n");
-              opCode.append("MUL\n");
-
-              $exprType = "rat";
+            $code = genMulRat($code, $f2.code);
+            if ($exprType.equals("int") && $f2.exprType.equals("int")) $exprType = "int";
+            else $exprType = "rat";
+          } else {
+            $code = genDivRat($code, $f2.code);
+            $exprType = "rat";
           }
-
-          opCode.append(genNormalizeDenSign());
-
-          c.append(opCode.toString());
-          $code = c.toString();
         }
+	)*;
 
-      )*
-    ;
-
-
-arithmAtom returns [String code, String exprType]
-    : 'num' '(' r=arithmExpr ')'
-      {
+arithmAtom
+	returns[String code, String exprType]:
+	'num' '(' r = arithmExpr ')' {
         // r: rat veya int olabilir ama sonuç her zaman int
         StringBuilder c = new StringBuilder();
         c.append($r.code);                  // ..., num, den
@@ -719,8 +703,7 @@ arithmAtom returns [String code, String exprType]
         $code = c.toString();
         $exprType = "int";
       }
-    | 'denum' '(' r=arithmExpr ')'
-      {
+	| 'denum' '(' r = arithmExpr ')' {
         StringBuilder c = new StringBuilder();
         c.append($r.code);                  // ..., num, den
         c.append("STOREG " + G_TMP0 + "\n");// g0 = den, stack: ..., num
@@ -730,29 +713,26 @@ arithmAtom returns [String code, String exprType]
         $code = c.toString();
         $exprType = "int";
       }
-     | 'pgcd' '(' ia=intExpr COMMA ib=intExpr ')'
-      {
+	| 'pgcd' '(' ia = intExpr COMMA ib = intExpr ')' {
         StringBuilder c = new StringBuilder();
         c.append(genGcd($ia.code, $ib.code)); // ..., gcd
         c.append("PUSHI 1\n");                // ..., gcd, 1
         $code = c.toString();
         $exprType = "int";
       }
-
-    | 'ppcm' '(' ia=intExpr COMMA ib=intExpr ')'
-      {
+	| 'ppcm' '(' ia = intExpr COMMA ib = intExpr ')' {
         StringBuilder c = new StringBuilder();
         c.append(genLcm($ia.code, $ib.code)); // ..., lcm
         c.append("PUSHI 1\n");                // ..., lcm, 1
         $code = c.toString();
         $exprType = "int";
       }
-    | 'sim' '(' r=arithmExpr ')' // simplify 
-      { $code = genSim($r.code); $exprType = "rat"; }
-    | LBRACK r=arithmExpr RBRACK // round to nearest int
-      { $code = genRoundNearestInt($r.code); $exprType = "int"; }
-    | ADDSUB a=arithmAtom      // unary + / -
-      {
+	| 'sim' '(' r = arithmExpr ')' // simplify 
+	{ $code = genSim($r.code); $exprType = "rat"; }
+	| LBRACK r = arithmExpr RBRACK // round to nearest int
+	{ $code = genRoundNearestInt($r.code); $exprType = "int"; }
+	| ADDSUB a = arithmAtom // unary + / -
+	{
         String op = $ADDSUB.getText();
         StringBuilder c = new StringBuilder();
         c.append($a.code);           // ..., num, den
@@ -769,19 +749,17 @@ arithmAtom returns [String code, String exprType]
         // unary + veya - tipi değiştirmez
         $exprType = $a.exprType;
       }
-    | x=signedInt '/' y=signedInt
-      {
-        StringBuilder c = new StringBuilder();
-        c.append($x.code);
-        c.append($y.code);
-        c.append(genAssertNonZeroTop());     // <-- EKLE (den top'ta)
-        c.append(genNormalizeDenSign());
-        $code = c.toString();
-        $exprType = "rat";
-      }
-
-    | ENTIER        // integer literal: n  -> n/1
-      {
+	| x = signedInt DIV y = signedInt {
+    StringBuilder c = new StringBuilder();
+    c.append($x.code);
+    c.append($y.code);
+    c.append(genAssertNonZeroTop());
+    c.append(genNormalizeDenSign());
+    $code = c.toString();
+    $exprType = "rat";
+  }
+	| ENTIER // integer literal: n  -> n/1
+	{
         String n = $ENTIER.getText();
         StringBuilder c = new StringBuilder();
         c.append("PUSHI ").append(n).append("\n"); // num
@@ -789,205 +767,179 @@ arithmAtom returns [String code, String exprType]
         $code = c.toString();
         $exprType = "int";
       }
-    | '(' e=arithmExpr ')'
-      {
+	| '(' e = arithmExpr ')' {
         $code = $e.code;
         $exprType = $e.exprType;
       }
-    | 'lire' '(' ')'
-      {
+	| 'lire' '(' ')' {
+    
+      StringBuilder c = new StringBuilder();
+      c.append("READ\nREAD\n");
+      c.append(genAssertNonZeroTop());
+      c.append(genNormalizeDenSign());
+      $code = c.toString();
+      $exprType = "rat";
+  };
+
+arithmPow
+	returns[String code, String exprType]:
+	a1 = arithmAtom {
+      $code = $a1.code;
+      $exprType = $a1.exprType;   // pas de POW => type de la base
+    } (
+		// ---------- (1) static exponent: a ** 3 ----------
+		POW e = ENTIER {
+        int n = Integer.parseInt($e.getText());
+        if (n < 0) throw new RuntimeException("Negative exponent not supported: " + n);
+
         StringBuilder c = new StringBuilder();
-        c.append("READ\nREAD\n");       // iki int okuyor: num, den
-        c.append(genAssertNonZeroTop()); // den üstte: den!=0
-        c.append(genNormalizeDenSign());
+
+        // base -> globals
+        c.append($a1.code); // ..., baseNum, baseDen
+        c.append("STOREG " + G_POW_BASE_DEN + "\n");
+        c.append("STOREG " + G_POW_BASE_NUM + "\n");
+
+        // res = 1/1
+        c.append("PUSHI 1\n");
+        c.append("PUSHI 1\n");
+        c.append("STOREG " + G_POW_RES_DEN + "\n");
+        c.append("STOREG " + G_POW_RES_NUM + "\n");
+
+        // exp = n
+        c.append("PUSHI " + n + "\n");
+        c.append("STOREG " + G_POW_EXP + "\n");
+
+        String L_CHECK = newLabel("POW_S_CHECK");
+        String L_BODY  = newLabel("POW_S_BODY");
+        String L_END   = newLabel("POW_S_END");
+
+        // while (exp != 0)
+        c.append("LABEL " + L_CHECK + "\n");
+        c.append("PUSHG " + G_POW_EXP + "\n");
+        c.append("PUSHI 0\n");
+        c.append("EQUAL\n");                 // exp == 0 ?
+        c.append("JUMPF " + L_BODY + "\n");  // false => continue
+        c.append("JUMP " + L_END + "\n");    // true  => end
+
+        c.append("LABEL " + L_BODY + "\n");
+
+        // res = res * base   (reuse genMulRat)
+        c.append(
+          genMulRat(
+            "PUSHG " + G_POW_RES_NUM + "\n" +
+            "PUSHG " + G_POW_RES_DEN + "\n",
+            "PUSHG " + G_POW_BASE_NUM + "\n" +
+            "PUSHG " + G_POW_BASE_DEN + "\n"
+          )
+        );
+
+        // store back into res globals (stack: ..., num, den)
+        c.append("STOREG " + G_POW_RES_DEN + "\n");
+        c.append("STOREG " + G_POW_RES_NUM + "\n");
+
+        // exp--
+        c.append("PUSHG " + G_POW_EXP + "\n");
+        c.append("PUSHI 1\n");
+        c.append("SUB\n");
+        c.append("STOREG " + G_POW_EXP + "\n");
+
+        c.append("JUMP " + L_CHECK + "\n");
+
+        // end
+        c.append("LABEL " + L_END + "\n");
+        c.append("PUSHG " + G_POW_RES_NUM + "\n");
+        c.append("PUSHG " + G_POW_RES_DEN + "\n");
+
         $code = c.toString();
+        $exprType = $a1.exprType;   // IMPORTANT: same as base
       }
-    ;
 
-arithmPow returns [String code, String exprType]
-    : a1=arithmAtom
-      {
-        $code = $a1.code;
-        $exprType = $a1.exprType;   // pow yoksa base tipi
+		// ---------- (2) runtime exponent: a ** lire() ----------
+		| POW 'lire' '(' ')' {
+        StringBuilder c = new StringBuilder();
+
+        // base: ..., num, den
+        c.append($a1.code);
+
+        // save base
+        c.append("STOREG " + G_POW_BASE_DEN + "\n");
+        c.append("STOREG " + G_POW_BASE_NUM + "\n");
+
+        // read exponent (INT)
+        c.append("READ\n");
+        c.append("STOREG " + G_POW_EXP + "\n");   // stack empty
+
+        // reject negative exponent
+        String L_EXP_OK = newLabel("POW_EXP_OK");
+        c.append("PUSHG " + G_POW_EXP + "\n");
+        c.append("PUSHI 0\n");
+        c.append("INF\n");                        // exp < 0 ?
+        c.append("JUMPF " + L_EXP_OK + "\n");     // false => exp >= 0
+        c.append("HALT\n");                       // true  => exp < 0
+        c.append("LABEL " + L_EXP_OK + "\n");
+
+        // res = 1/1
+        c.append("PUSHI 1\n");
+        c.append("PUSHI 1\n");
+        c.append("STOREG " + G_POW_RES_DEN + "\n");
+        c.append("STOREG " + G_POW_RES_NUM + "\n");
+
+        String L_CHECK = newLabel("POW_CHECK");
+        String L_BODY  = newLabel("POW_BODY");
+        String L_END   = newLabel("POW_END");
+
+        // while (exp != 0)
+        c.append("LABEL " + L_CHECK + "\n");
+        c.append("PUSHG " + G_POW_EXP + "\n");
+        c.append("PUSHI 0\n");
+        c.append("EQUAL\n");                      // exp == 0 ?
+        c.append("JUMPF " + L_BODY + "\n");       // false => continue
+        c.append("JUMP " + L_END + "\n");         // true  => end
+
+        c.append("LABEL " + L_BODY + "\n");
+
+        // res = res * base   (reuse genMulRat)
+        c.append(
+          genMulRat(
+            "PUSHG " + G_POW_RES_NUM + "\n" +
+            "PUSHG " + G_POW_RES_DEN + "\n",
+            "PUSHG " + G_POW_BASE_NUM + "\n" +
+            "PUSHG " + G_POW_BASE_DEN + "\n"
+          )
+        );
+
+        // store back into res globals
+        c.append("STOREG " + G_POW_RES_DEN + "\n");
+        c.append("STOREG " + G_POW_RES_NUM + "\n");
+
+        // exp--
+        c.append("PUSHG " + G_POW_EXP + "\n");
+        c.append("PUSHI 1\n");
+        c.append("SUB\n");
+        c.append("STOREG " + G_POW_EXP + "\n");
+
+        c.append("JUMP " + L_CHECK + "\n");
+
+        // end
+        c.append("LABEL " + L_END + "\n");
+        c.append("PUSHG " + G_POW_RES_NUM + "\n");
+        c.append("PUSHG " + G_POW_RES_DEN + "\n");
+
+        $code = c.toString();
+        $exprType = $a1.exprType;   // IMPORTANT: same as base
       }
-      (
-        // ---------- (1) static exponent: a ** 3 ----------
-        POW e=ENTIER
-          {
-            int n = Integer.parseInt($e.getText());
-            if (n < 0) throw new RuntimeException("Negative exponent not supported: " + n);
+	)?;
 
-            StringBuilder c = new StringBuilder();
-
-            // base -> globals
-            c.append($a1.code); // ..., baseNum, baseDen
-            c.append("STOREG " + G_POW_BASE_DEN + "\n");
-            c.append("STOREG " + G_POW_BASE_NUM + "\n");
-
-            // res = 1/1
-            c.append("PUSHI 1\nPUSHI 1\n");
-            c.append("STOREG " + G_POW_RES_DEN + "\n");
-            c.append("STOREG " + G_POW_RES_NUM + "\n");
-
-            // exp = n
-            c.append("PUSHI " + n + "\n");
-            c.append("STOREG " + G_POW_EXP + "\n");
-
-            String L_CHECK = newLabel("POW_S_CHECK");
-            String L_BODY  = newLabel("POW_S_BODY");
-            String L_END   = newLabel("POW_S_END");
-
-            // while (exp != 0)
-            c.append("LABEL " + L_CHECK + "\n");
-            c.append("PUSHG " + G_POW_EXP + "\n");
-            c.append("PUSHI 0\n");
-            c.append("EQUAL\n");
-            c.append("JUMPF " + L_BODY + "\n");
-            c.append("JUMP " + L_END + "\n");
-
-            c.append("LABEL " + L_BODY + "\n");
-
-            // res = res * base
-            c.append("PUSHG " + G_POW_RES_NUM + "\n");
-            c.append("PUSHG " + G_POW_RES_DEN + "\n");
-            c.append("PUSHG " + G_POW_BASE_NUM + "\n");
-            c.append("PUSHG " + G_POW_BASE_DEN + "\n");
-
-            c.append("STOREG " + G_TMP0 + "\n"); // d2
-            c.append("STOREG " + G_TMP1 + "\n"); // n2
-            c.append("STOREG " + G_TMP2 + "\n"); // d1
-            c.append("STOREG " + G_TMP3 + "\n"); // n1
-
-            c.append("PUSHG " + G_TMP3 + "\n");
-            c.append("PUSHG " + G_TMP1 + "\n");
-            c.append("MUL\n");                    // num
-
-            c.append("PUSHG " + G_TMP2 + "\n");
-            c.append("PUSHG " + G_TMP0 + "\n");
-            c.append("MUL\n");                    // den
-
-            // normalize den sign (opsiyonel ama iyi)
-            c.append(genNormalizeDenSign());
-
-            c.append("STOREG " + G_POW_RES_DEN + "\n");
-            c.append("STOREG " + G_POW_RES_NUM + "\n");
-
-            // exp--
-            c.append("PUSHG " + G_POW_EXP + "\n");
-            c.append("PUSHI 1\n");
-            c.append("SUB\n");
-            c.append("STOREG " + G_POW_EXP + "\n");
-
-            c.append("JUMP " + L_CHECK + "\n");
-
-            c.append("LABEL " + L_END + "\n");
-            c.append("PUSHG " + G_POW_RES_NUM + "\n");
-            c.append("PUSHG " + G_POW_RES_DEN + "\n");
-
-            $code = c.toString();
-            $exprType = $a1.exprType; // int base -> int, rat base -> rat
-          }
-
-        // ---------- (2) runtime exponent: a ** lire() ----------
-      | POW 'lire' '(' ')'
-        {
-          StringBuilder c = new StringBuilder();
-
-          // base: ..., num, den
-          c.append($a1.code);
-
-          // save base
-          c.append("STOREG " + G_POW_BASE_DEN + "\n");
-          c.append("STOREG " + G_POW_BASE_NUM + "\n");
-
-          // read exponent
-          c.append("READ\n");
-          c.append("STOREG " + G_POW_EXP + "\n");   // stack empty
-
-          // ---- reject negative exponent safely ----
-          String L_EXP_OK = newLabel("POW_EXP_OK");
-
-          c.append("PUSHG " + G_POW_EXP + "\n");
-          c.append("PUSHI 0\n");
-          c.append("INF\n");                        // exp < 0 ?
-          c.append("JUMPF " + L_EXP_OK + "\n");     // false => exp >= 0
-          c.append("HALT\n");                       // true  => exp < 0
-
-          c.append("LABEL " + L_EXP_OK + "\n");
-
-          // res = 1/1
-          c.append("PUSHI 1\n");
-          c.append("PUSHI 1\n");
-          c.append("STOREG " + G_POW_RES_DEN + "\n");
-          c.append("STOREG " + G_POW_RES_NUM + "\n");
-
-          String L_CHECK = newLabel("POW_CHECK");
-          String L_BODY  = newLabel("POW_BODY");
-          String L_END   = newLabel("POW_END");
-
-          // while (exp != 0)
-          c.append("LABEL " + L_CHECK + "\n");
-          c.append("PUSHG " + G_POW_EXP + "\n");
-          c.append("PUSHI 0\n");
-          c.append("EQUAL\n");                      // exp == 0 ?
-          c.append("JUMPF " + L_BODY + "\n");       // false => continue
-          c.append("JUMP " + L_END + "\n");         // true  => end
-
-          c.append("LABEL " + L_BODY + "\n");
-
-          // res = res * base
-          c.append("PUSHG " + G_POW_RES_NUM + "\n");
-          c.append("PUSHG " + G_POW_RES_DEN + "\n");
-          c.append("PUSHG " + G_POW_BASE_NUM + "\n");
-          c.append("PUSHG " + G_POW_BASE_DEN + "\n");
-
-          c.append("STOREG " + G_TMP0 + "\n"); // d2
-          c.append("STOREG " + G_TMP1 + "\n"); // n2
-          c.append("STOREG " + G_TMP2 + "\n"); // d1
-          c.append("STOREG " + G_TMP3 + "\n"); // n1
-
-          c.append("PUSHG " + G_TMP3 + "\n");
-          c.append("PUSHG " + G_TMP1 + "\n");
-          c.append("MUL\n");                    // num
-
-          c.append("PUSHG " + G_TMP2 + "\n");
-          c.append("PUSHG " + G_TMP0 + "\n");
-          c.append("MUL\n");                    // den
-
-          c.append("STOREG " + G_POW_RES_DEN + "\n");
-          c.append("STOREG " + G_POW_RES_NUM + "\n");
-
-          // exp--
-          c.append("PUSHG " + G_POW_EXP + "\n");
-          c.append("PUSHI 1\n");
-          c.append("SUB\n");
-          c.append("STOREG " + G_POW_EXP + "\n");
-
-          c.append("JUMP " + L_CHECK + "\n");
-
-          // end
-          c.append("LABEL " + L_END + "\n");
-          c.append("PUSHG " + G_POW_RES_NUM + "\n");
-          c.append("PUSHG " + G_POW_RES_DEN + "\n");
-
-          $code = c.toString();
-          $exprType = "rat";
-        }
-      )*
-    ;
-
-intExpr returns [String code]
-  : s=signedInt
-    { $code = $s.code; }
-  | 'num' '(' r=arithmExpr ')'
-    {
+intExpr
+	returns[String code]:
+	s = signedInt { $code = $s.code; }
+	| 'num' '(' r = arithmExpr ')' {
       StringBuilder c = new StringBuilder();
       c.append($r.code);
       c.append("STOREG " + G_TMP0 + "\n"); // pop den, stack: ..., num
       $code = c.toString();
     }
-  | 'denum' '(' r=arithmExpr ')'
-    {
+	| 'denum' '(' r = arithmExpr ')' {
       StringBuilder c = new StringBuilder();
       c.append($r.code);
       c.append("STOREG " + G_TMP0 + "\n"); // pop den
@@ -995,81 +947,71 @@ intExpr returns [String code]
       c.append("PUSHG " + G_TMP0 + "\n");  // push den
       $code = c.toString();
     }
-  | 'pgcd' '(' a=intExpr COMMA b=intExpr ')'
-    { $code = genGcd($a.code, $b.code); }
-  | 'ppcm' '(' a=intExpr COMMA b=intExpr ')'
-    { $code = genLcm($a.code, $b.code); }
-  ;
+	| 'pgcd' '(' a = intExpr COMMA b = intExpr ')' { $code = genGcd($a.code, $b.code); }
+	| 'ppcm' '(' a = intExpr COMMA b = intExpr ')' { $code = genLcm($a.code, $b.code); };
 
-signedInt returns [String code]
-  : ADDSUB? ENTIER
-    {
+signedInt
+	returns[String code]:
+	ADDSUB? ENTIER {
       String s = ($ADDSUB != null) ? $ADDSUB.getText() : "";
       $code = "PUSHI " + s + $ENTIER.getText() + "\n";
-    }
-  ;
+    };
 
+boolOr
+	returns[String code]:
+	a = boolAnd { $code = $a.code; } (
+		'ou' b = boolAnd { $code = genOr($code, $b.code); }
+	)*;
 
-boolOr returns [String code]
-    : a=boolAnd              { $code = $a.code; }
-      ( 'ou' b=boolAnd       { $code = genOr($code, $b.code); } )*
-    ;
+boolAnd
+	returns[String code]:
+	a = boolNot { $code = $a.code; } (
+		'et' b = boolNot { $code = genAnd($code, $b.code); }
+	)*;
 
-boolAnd returns [String code]
-    : a=boolNot              { $code = $a.code; }
-      ( 'et' b=boolNot       { $code = genAnd($code, $b.code); } )*
-    ;
+boolNot
+	returns[String code]:
+	'non' b = boolNot { $code = genNot($b.code); }
+	| boolAtom { $code = $boolAtom.code; };
 
-boolNot returns [String code]
-    : 'non' b=boolNot        { $code = genNot($b.code); }
-    | boolAtom               { $code = $boolAtom.code; }
-    ;
-
-boolAtom returns [String code]
-    : 'true'
-      {
+boolAtom
+	returns[String code]:
+	'true' {
         $code = "PUSHI 1\n";
       }
-    | 'false'
-      {
+	| 'false' {
         $code = "PUSHI 0\n";
       }
-    | a1=arithmExpr op=LOGICOP a2=arithmExpr
-      {
+	| a1 = arithmExpr op = LOGICOP a2 = arithmExpr {
         $code = genCmp($a1.code, $op.getText(), $a2.code);
       }
-    | '(' b=boolOr ')'
-      { $code = $b.code; }
-    | 'lire' '(' ')'
-      {
+	| '(' b = boolOr ')' { $code = $b.code; }
+	| 'lireBool' '(' ')' {
         StringBuilder c = new StringBuilder();
-        c.append("READ \nREAD \n");          // num, den
-        c.append(genAssertNonZeroTop());     // <-- EKLE (den top'ta)
-        c.append(genNormalizeDenSign());
+        c.append("READ\n");
+        c.append("PUSHI 0\n");
+        c.append("NEQ\n");
         $code = c.toString();
-      }
-    ;
-
+      };
 
 // ---------------- Lexer rules ----------------
-NEWLINE : '\r'? '\n';       // match newlines
-SEMICOLON : ';' ;           // match semicolons
+NEWLINE: '\r'? '\n'; // match newlines
+SEMICOLON: ';'; // match semicolons
 
-POW    : '**' ;            // $POW.getText()  | $POW.getType()
-MULDIV : ('*' | '/');      // $MULDIV.getText()  | $MULDIV.getType() 
-ADDSUB : ('+' | '-');      // $ADDSUB.getText()  | $ADDSUB.getType()
+POW: '**'; // $POW.getText()  | $POW.getType()
+MUL: '*';
+DIV: '/';
+ADDSUB: ('+' | '-'); // $ADDSUB.getText()  | $ADDSUB.getType()
 
-LOGICOP : ('==' | '<>' | '<' | '<=' | '>' | '>='); // $LOGICOP.getText()  | $LOGICOP.getType()
+LOGICOP: ('==' | '<>' | '<' | '<=' | '>' | '>='); // $LOGICOP.getText()  | $LOGICOP.getType()
 
-ENTIER : ('0'..'9')+;       // match integers , all sequences of digits
+ENTIER: ('0' ..'9')+; // match integers , all sequences of digits
 
-LBRACK : '[' ; 
-RBRACK : ']' ;
-COMMA  : ',' ;
+LBRACK: '[';
+RBRACK: ']';
+COMMA: ',';
 
-LINE_COMMENT : '//' ~[\r\n]* -> skip ;
+LINE_COMMENT: '//' ~[\r\n]* -> skip;
 
-WS : (' '|'\t')+ -> skip;   // ignore spaces and tabs
-//UNMATCH : . -> skip;        // ignore any other character // -> il mange les paranthèses 
-
-
+WS: (' ' | '\t')+ -> skip; // ignore spaces and tabs
+//UNMATCH : . -> skip;        // ignore any other character // -> il mange les paranthèses <EOF>
