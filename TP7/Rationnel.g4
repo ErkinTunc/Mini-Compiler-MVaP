@@ -23,7 +23,8 @@ grammar Rationnel;
   {
     boolean initialized;
     VarType type ; // type \in {INT, BOOL, RATIONNEL}
-    int address;   // address in MVaP memory   
+    int address;   // address in MVaP memory
+    int size;      // 1 for INT/BOOL, 2 for RATIONNEL
   }
 
   static class FunctionInfo
@@ -73,7 +74,7 @@ grammar Rationnel;
   void emit(String instr)
   {
     if (currentFunction != null) {
-        currentFunction.code.append(instr).append("\n");
+        currentFunction.code.append(instr).append("\n");0
     } else {
         instructions.append(instr).append("\n");
     }
@@ -84,9 +85,10 @@ grammar Rationnel;
     variables.append(instr).append("\n");
   }
 
-  void emitFunction(String fonctionName)
+  void emitFunction(String fonctionName, FunctionInfo function)
   {
-    
+    fonctions.append(functionName + ":\n");
+    fonctions.append(function.code.toString());
   }
   
   /*
@@ -149,20 +151,19 @@ start
     // Post-processing: Assemble code
     System.out.println(variables.toString());
     
+    // Main instruction label if needed, but mainly:
+    System.out.println(instructions.toString()); // TODO change this so the output is a .mvap file
+    
+    // End of program (HALT)
+    System.out.println("HALT");
+
     // Sort functions by name or keep definition order? Hashmap is unordered.
     // If order matters (it shouldn't for MVaP usually), we iterate values.
-
     for (FunctionInfo f : functions.values()) {
         if (f.used) {
             System.out.println(f.code.toString());
         }
     }
-    
-    // Main instruction label if needed, but mainly:
-    System.out.println(instructions.toString()); // TODO change this so the output is a .mvap file
-
-    // End of program (HALT)
-    System.out.println("HALT");
 };
 
 function:
@@ -194,14 +195,18 @@ params
 	t1 = type id1 = ID {
         // Add param to vars
         VarEntry v = new VarEntry();
-        v.type = VarType.INT; // Should map t1.value
-        v.address = lastAddress++;
+        v.type = VarType.INT; 
+        v.size = 1;
+        v.address = lastAddress;
+        lastAddress += v.size;
         varTab.put($id1.getText(), v);
     } (
 		',' tn = type idn = ID {
-         VarEntry vn = new VarEntry();
-         vn.type = VarType.INT; 
-         vn.address = lastAddress++;
+         vn.type = VarType.INT; // Default
+         // TODO: fix type assignment later
+         vn.size = 1;
+         vn.address = lastAddress;
+         lastAddress += vn.size;
          varTab.put($idn.getText(), vn);
     }
 	)*;
@@ -235,7 +240,7 @@ instruction:
 
 declAssignInstr
 	returns[List<String> listIds]:
-	t = type ids = idList '=' e = expr {
+	t = type ids = idList[$t.value] '=' e = expr {
     for (String id : ids) {
         VarEntry v = varTab.get(id);
         if (v != null) {
@@ -246,11 +251,11 @@ declAssignInstr
     }
 };
 
-declInstr: t = type ids = idList;
+declInstr: t = type ids = idList[$t.value];
 
 type
 	returns[String value]: TYPE { $value = $TYPE.getText(); };
-idList
+idList[String typeName]
 	returns[List<String> value]: // ids = id start
 	id1 = ID {
     $value = new ArrayList<>();
@@ -258,8 +263,15 @@ idList
     
     // Allocate address
     VarEntry v = new VarEntry();
-    v.type = VarType.INT; // Defaulting to INT for now based on grammar flow, ideally passed from 'type' rule
-    v.address = lastAddress++;
+    if ($typeName.equals("rationnel")) {
+        v.type = VarType.RATIONNEL;
+        v.size = 2;
+    } else {
+        v.type = ($typeName.equals("bool")) ? VarType.BOOL : VarType.INT;
+        v.size = 1;
+    }
+    v.address = lastAddress;
+    lastAddress += v.size;
     varTab.put($id1.getText(), v);
       
   } (
@@ -268,8 +280,15 @@ idList
       
        // Allocate address
       VarEntry vn = new VarEntry();
-      vn.type = VarType.INT;
-      vn.address = lastAddress++;
+      if ($typeName.equals("rationnel")) {
+          vn.type = VarType.RATIONNEL;
+          vn.size = 2;
+      } else {
+          vn.type = ($typeName.equals("bool")) ? VarType.BOOL : VarType.INT;
+          vn.size = 1;
+      }
+      vn.address = lastAddress;
+      lastAddress += vn.size;
       varTab.put($idn.getText(), vn);
       
    }
@@ -279,7 +298,15 @@ assignInstr:
 	id = ID '=' e = expr {
     VarEntry v = varTab.get($id.getText());
     if (v != null) {
-       emit("STORE " + v.address); 
+       if (v.type != $e.type) {
+           System.err.println("Type mismatch in assignment. Expected " + v.type + " but got " + $e.type);
+       }
+       
+       emit("STORE " + v.address);
+       if (v.type == VarType.RATIONNEL) {
+           emit("STORE " + (v.address + 1));
+           emit("STORE " + v.address);
+       }
     } else {
        System.err.println("Undefined variable: " + $id.getText());
     }
@@ -287,28 +314,153 @@ assignInstr:
 
 // Nous allons reprendre les régles des TPs précédents pour les expressions arithmétiques et
 // booléennes Cela nous permettra de passer au tests
-expr: e1 = arithmexpr | e2 = boolexpr;
+expr
+	returns[VarType t]:
+	e1 = arithmexpr { $t = $e1.t; }
+	| e2 = boolexpr { $t = $e2.t; };
 
-arithmexpr:
-	e1 = ENTIER { emit("PUSHI " + $e1.getText()); }
+arithmexpr
+	returns[VarType type]:
+	e1 = ENTIER { 
+        emit("PUSHI " + $e1.getText()); 
+        $type = VarType.INT;
+    }
 	| id = ID {
          VarEntry v = varTab.get($id.getText());
          if (v != null) {
              emit("LOAD " + v.address);
+             if (v.type == VarType.RATIONNEL) {
+                 emit("LOAD " + (v.address+1));
+             }
+             $type = v.type;
          } else {
              System.err.println("Undefined variable: " + $id.getText());
+             $type = VarType.INT; // fallback
          }
     }
+	| e1 = arithmexpr RAT e2 = arithmexpr {
+        // Constructor for rational: e1 / e2
+        // e1 (Num), e2 (Den)
+        if ($e1.type != VarType.INT || $e2.type != VarType.INT) {
+             System.err.println("Rational constructor expects Integers.");
+        }
+        $type = VarType.RATIONNEL;
+    }
 	| left = arithmexpr op = MULDIV right = arithmexpr {
-        if ($op.getText().equals("*")) emit("MUL");
-        else emit("DIV");
+        if ($left.type != $right.type) {
+             System.err.println("Type mismatch in MULDIV operation.");
+             $type = VarType.INT;
+        } else {
+             $type = $left.type;
+             if ($type == VarType.INT) {
+                 if ($op.getText().equals("*")) emit("MUL");
+                 else emit("DIV");
+             } else {
+                 // RATIONNEL Operation
+                 // Stack: [NumA, DenA, NumB, DenB] (Top)
+                 // We need scratch vars. 
+                 // Strategy: STORE denB, STORE numB, STORE denA, STORE numA
+                 // Then perform logic.
+                 // This requires reserving temp addresses. 
+                 // Since we don't have dynamic temp allocator, strict stack logic is hard without SWAP.
+                 // Let's rely on Java-side logic to generate the complex sequence.
+                 
+                 // Op: * (Multiply)
+                 // A * B = (nA * nB) / (dA * dB)
+                 // Stack: nA dA nB dB
+                 if ($op.getText().equals("*")) {
+                     // We need nA * nB -> NewNum
+                     // dA * dB -> NewDen
+                     // We can't reach nA easily.
+                     // Assuming no SWAP/ROT, we MUST use temp vars.
+                     // Let's use high addresses for temp? Or simple stack tricks?
+                     // MVaP usually has STORE(addr) / LOAD(addr).
+                     
+                     // Let's assume we can use a "temp" base address.
+                     // But we are in a recursive descent, we might overwrite temps?
+                     // No, expressions evaluate fully.
+                     int t1 = lastAddress;
+                     int t2 = lastAddress + 1;
+                     int t3 = lastAddress + 2;
+                     int t4 = lastAddress + 3;
+                     
+                     emit("STORE " + t4); // dB
+                     emit("STORE " + t3); // nB
+                     emit("STORE " + t2); // dA
+                     emit("STORE " + t1); // nA
+                     
+                     // Compute Num
+                     emit("LOAD " + t1);
+                     emit("LOAD " + t3);
+                     emit("MUL");
+                     
+                     // Compute Den
+                     emit("LOAD " + t2);
+                     emit("LOAD " + t4);
+                     emit("MUL");
+                 }
+                 // Op: : (Division) -> A : B = A * (1/B) = A * (dB/nB)
+                 // = (nA * dB) / (dA * nB)
+                 else {
+                     int t1 = lastAddress; int t2 = lastAddress+1;
+                     int t3 = lastAddress+2; int t4 = lastAddress+3;
+                     emit("STORE " + t4); // dB
+                     emit("STORE " + t3); // nB
+                     emit("STORE " + t2); // dA
+                     emit("STORE " + t1); // nA
+                     
+                     emit("LOAD " + t1);
+                     emit("LOAD " + t4);
+                     emit("MUL");
+                     
+                     emit("LOAD " + t2);
+                     emit("LOAD " + t3);
+                     emit("MUL");
+                 }
+             }
+        }
     }
 	| left = arithmexpr op = ADDSUB right = arithmexpr {
-        if ($op.getText().equals("+")) emit("ADD");
-        else emit("SUB");
+        if ($left.type != $right.type) {
+             System.err.println("Type mismatch in ADDSUB operation.");
+             $type = VarType.INT;
+        } else {
+             $type = $left.type;
+             if ($type == VarType.INT) {
+                 if ($op.getText().equals("+")) emit("ADD");
+                 else emit("SUB");
+             } else {
+                 // RATIONNEL
+                 // A + B = (nA*dB + nB*dA) / (dA*dB)
+                 // A - B = (nA*dB - nB*dA) / (dA*dB)
+                 int t1 = lastAddress; int t2 = lastAddress+1;
+                 int t3 = lastAddress+2; int t4 = lastAddress+3;
+                 emit("STORE " + t4); // dB
+                 emit("STORE " + t3); // nB
+                 emit("STORE " + t2); // dA
+                 emit("STORE " + t1); // nA
+                 
+                 // Num
+                 emit("LOAD " + t1);
+                 emit("LOAD " + t4);
+                 emit("MUL");
+                 
+                 emit("LOAD " + t3);
+                 emit("LOAD " + t2);
+                 emit("MUL");
+                 
+                 if ($op.getText().equals("+")) emit("ADD");
+                 else emit("SUB");
+                 
+                 // Den
+                 emit("LOAD " + t2);
+                 emit("LOAD " + t4);
+                 emit("MUL");
+             }
+        }
     }
-	| appel // Function call
-	| '(' expr ')'; // Grouping
+	| appel { $type = VarType.INT; } // Assume INT for now, or fetch function return type
+	| '(' e = expr ')' { $type = $e.type; };
 
 boolexpr:
 	b1 = 'true' {
@@ -318,12 +470,44 @@ boolexpr:
     emit("PUSHI 0");
   }
 	| e1 = arithmexpr op = LOGICOP e2 = arithmexpr {
-      if ($op.getText().equals("==")) emit("EQUAL");
-      else if ($op.getText().equals("<")) emit("INF");
-      else if ($op.getText().equals("<=")) emit("INFE");
-      else if ($op.getText().equals(">")) emit("SUP");
-      else if ($op.getText().equals(">=")) emit("SUPE");
-      else if ($op.getText().equals("<>")) emit("NEQ");
+      if ($e1.type != $e2.type) {
+           System.err.println("Type mismatch in boolean comparison.");
+      }
+      
+      if ($e1.type == VarType.INT) {
+          if ($op.getText().equals("==")) emit("EQUAL");
+          else if ($op.getText().equals("<")) emit("INF");
+          else if ($op.getText().equals("<=")) emit("INFE");
+          else if ($op.getText().equals(">")) emit("SUP");
+          else if ($op.getText().equals(">=")) emit("SUPE");
+          else if ($op.getText().equals("<>")) emit("NEQ");
+      } else {
+          // RATIONNEL Comparison
+          // A op B <=> nA/dA op nB/dB <=> nA*dB op nB*dA
+          int t1 = lastAddress; int t2 = lastAddress+1;
+          int t3 = lastAddress+2; int t4 = lastAddress+3;
+          emit("STORE " + t4); // dB
+          emit("STORE " + t3); // nB
+          emit("STORE " + t2); // dA
+          emit("STORE " + t1); // nA
+          
+          // LHS = nA * dB
+          emit("LOAD " + t1);
+          emit("LOAD " + t4);
+          emit("MUL");
+          
+          // RHS = nB * dA
+          emit("LOAD " + t3);
+          emit("LOAD " + t2);
+          emit("MUL");
+          
+          if ($op.getText().equals("==")) emit("EQUAL");
+          else if ($op.getText().equals("<")) emit("INF");
+          else if ($op.getText().equals("<=")) emit("INFE");
+          else if ($op.getText().equals(">")) emit("SUP");
+          else if ($op.getText().equals(">=")) emit("SUPE");
+          else if ($op.getText().equals("<>")) emit("NEQ");
+      }
   };
 
 /*
@@ -430,7 +614,8 @@ NEWLINE: '\r'? '\n';
 SEMICOLON: ';';
 // match semicolons
 
-MULDIV: ('*' | '/');
+MULDIV: ('*' | ':');
+RAT: '/';
 // $MULDIV.getText()  | $MULDIV.getType() 
 ADDSUB: ('+' | '-');
 // $ADDSUB.getText()  | $ADDSUB.getType()
@@ -442,7 +627,7 @@ LOGICOP: ('==' | '<>' | '<' | '<=' | '>' | '>=');
 ENTIER: ('0' ..'9')+;
 // match integers , all sequences of digits
 
-TYPE: 'int' | 'bool';
+TYPE: 'int' | 'bool' | 'rationnel';
 // match types
 ID: [a-zA-Z_] [a-zA-Z0-9_]*;
 // match identifiers

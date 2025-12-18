@@ -51,13 +51,13 @@ grammar Rationnel;
   // holds function names and types and addresses in MVaP
   HashMap < String, FunctionInfo > functions = new HashMap<>();
   
-  // Template map for modular control structures
+  // Template map for modular control structures : aborted ???
   HashMap < String, CodeGenerator > templates = new HashMap<>();
 
   // holds the MVaP code
   StringBuilder variables = new StringBuilder();
   StringBuilder instructions = new StringBuilder();
-  StringBuilder fonctions = new StringBuilder();
+  StringBuilder functions = new StringBuilder();
 
   int labelCounter = 0 ;
   int lastAddress = 0;
@@ -87,7 +87,9 @@ grammar Rationnel;
   void emitFunction(String fonctionName)
   {
     
-  }
+    // TODO see how should it be implemented regarding the functions
+    // hashmap
+    }
   
   /*
    * Helper to call templates
@@ -442,7 +444,7 @@ LOGICOP: ('==' | '<>' | '<' | '<=' | '>' | '>=');
 ENTIER: ('0' ..'9')+;
 // match integers , all sequences of digits
 
-TYPE: 'int' | 'bool';
+TYPE: 'int' | 'bool' | 'rationnel';
 // match types
 ID: [a-zA-Z_] [a-zA-Z0-9_]*;
 // match identifiers
