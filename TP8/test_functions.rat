@@ -1,0 +1,16 @@
+rationnel test(int x, int y) {
+    int z;
+    z = x + y;
+    x > y ? {
+        retourner 1/1
+    } : {
+        retourner 1/2
+    }
+}
+
+int main() {
+    rationnel r;
+    r = test(10, 20);
+    Afficher r;
+    retourner 0
+}

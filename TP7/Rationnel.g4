@@ -74,7 +74,7 @@ grammar Rationnel;
   void emit(String instr)
   {
     if (currentFunction != null) {
-        currentFunction.code.append(instr).append("\n");0
+        currentFunction.code.append(instr).append("\n");
     } else {
         instructions.append(instr).append("\n");
     }
@@ -85,7 +85,7 @@ grammar Rationnel;
     variables.append(instr).append("\n");
   }
 
-  void emitFunction(String fonctionName, FunctionInfo function)
+  void emitFunction(String functionName, FunctionInfo function)
   {
     fonctions.append(functionName + ":\n");
     fonctions.append(function.code.toString());
@@ -202,9 +202,14 @@ params
         varTab.put($id1.getText(), v);
     } (
 		',' tn = type idn = ID {
-         vn.type = VarType.INT; // Default
-         // TODO: fix type assignment later
-         vn.size = 1;
+         VarEntry vn = new VarEntry();
+         if ($tn.value.equals("rationnel")) {
+             vn.type = VarType.RATIONNEL;
+             vn.size = 2;
+         } else {
+             vn.type = ($tn.value.equals("bool")) ? VarType.BOOL : VarType.INT;
+             vn.size = 1;
+         }
          vn.address = lastAddress;
          lastAddress += vn.size;
          varTab.put($idn.getText(), vn);
@@ -213,8 +218,10 @@ params
 
 code: (instruction | SEMICOLON | NEWLINE)*;
 
-appel:
+appel
+	returns[String nameText]:
 	name = ID '(' (args = expr (',' args2 = expr)*)? ')' {
+    $nameText = $name.getText();
     FunctionInfo f = functions.get($name.getText());
     if (f != null) {
         f.used = true;
@@ -241,7 +248,7 @@ instruction:
 declAssignInstr
 	returns[List<String> listIds]:
 	t = type ids = idList[$t.value] '=' e = expr {
-    for (String id : ids) {
+    for (String id : $ids.value) {
         VarEntry v = varTab.get(id);
         if (v != null) {
             emit("STORE " + v.address);
@@ -298,8 +305,8 @@ assignInstr:
 	id = ID '=' e = expr {
     VarEntry v = varTab.get($id.getText());
     if (v != null) {
-       if (v.type != $e.type) {
-           System.err.println("Type mismatch in assignment. Expected " + v.type + " but got " + $e.type);
+       if (v.type != $e.t) {
+           System.err.println("Type mismatch in assignment. Expected " + v.type + " but got " + $e.t);
        }
        
        emit("STORE " + v.address);
@@ -320,10 +327,10 @@ expr
 	| e2 = boolexpr { $t = $e2.t; };
 
 arithmexpr
-	returns[VarType type]:
-	e1 = ENTIER { 
-        emit("PUSHI " + $e1.getText()); 
-        $type = VarType.INT;
+	returns[VarType t]:
+	n = ENTIER { 
+        emit("PUSHI " + $n.getText()); 
+        $t = VarType.INT;
     }
 	| id = ID {
          VarEntry v = varTab.get($id.getText());
@@ -332,27 +339,27 @@ arithmexpr
              if (v.type == VarType.RATIONNEL) {
                  emit("LOAD " + (v.address+1));
              }
-             $type = v.type;
+             $t = v.type;
          } else {
              System.err.println("Undefined variable: " + $id.getText());
-             $type = VarType.INT; // fallback
+             $t = VarType.INT; // fallback
          }
     }
 	| e1 = arithmexpr RAT e2 = arithmexpr {
         // Constructor for rational: e1 / e2
         // e1 (Num), e2 (Den)
-        if ($e1.type != VarType.INT || $e2.type != VarType.INT) {
+        if ($e1.t != VarType.INT || $e2.t != VarType.INT) {
              System.err.println("Rational constructor expects Integers.");
         }
-        $type = VarType.RATIONNEL;
+        $t = VarType.RATIONNEL;
     }
 	| left = arithmexpr op = MULDIV right = arithmexpr {
-        if ($left.type != $right.type) {
+        if ($left.t != $right.t) {
              System.err.println("Type mismatch in MULDIV operation.");
-             $type = VarType.INT;
+             $t = VarType.INT;
         } else {
-             $type = $left.type;
-             if ($type == VarType.INT) {
+             $t = $left.t;
+             if ($t == VarType.INT) {
                  if ($op.getText().equals("*")) emit("MUL");
                  else emit("DIV");
              } else {
@@ -421,12 +428,12 @@ arithmexpr
         }
     }
 	| left = arithmexpr op = ADDSUB right = arithmexpr {
-        if ($left.type != $right.type) {
+        if ($left.t != $right.t) {
              System.err.println("Type mismatch in ADDSUB operation.");
-             $type = VarType.INT;
+             $t = VarType.INT;
         } else {
-             $type = $left.type;
-             if ($type == VarType.INT) {
+             $t = $left.t;
+             if ($t == VarType.INT) {
                  if ($op.getText().equals("+")) emit("ADD");
                  else emit("SUB");
              } else {
@@ -459,22 +466,35 @@ arithmexpr
              }
         }
     }
-	| appel { $type = VarType.INT; } // Assume INT for now, or fetch function return type
-	| '(' e = expr ')' { $type = $e.type; };
+	| appel { 
+          FunctionInfo f = functions.get($appel.nameText);
+          if (f != null) {
+              if (f.returnType.equals("rationnel")) $t = VarType.RATIONNEL;
+              else if (f.returnType.equals("bool")) $t = VarType.BOOL;
+              else $t = VarType.INT;
+          } else {
+             $t = VarType.INT; 
+          }
+      }
+	| '(' e = expr ')' { $t = $e.t; };
 
-boolexpr:
+boolexpr
+	returns[VarType t]:
 	b1 = 'true' {
     emit("PUSHI 1");
+    $t = VarType.BOOL;
   }
 	| b2 = 'false' {
     emit("PUSHI 0");
+    $t = VarType.BOOL;
   }
 	| e1 = arithmexpr op = LOGICOP e2 = arithmexpr {
-      if ($e1.type != $e2.type) {
+      if ($e1.t != $e2.t) {
            System.err.println("Type mismatch in boolean comparison.");
       }
+      $t = VarType.BOOL;
       
-      if ($e1.type == VarType.INT) {
+      if ($e1.t == VarType.INT) {
           if ($op.getText().equals("==")) emit("EQUAL");
           else if ($op.getText().equals("<")) emit("INF");
           else if ($op.getText().equals("<=")) emit("INFE");
