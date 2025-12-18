@@ -189,6 +189,8 @@ function:
         // Wait, MVaP 'RET' pops return address. Return Value is usually left on stack or in register.
         // This grammar implies 'retour' is an instruction.
         
+        // Epilogue
+        emit("RET");
         currentFunction = null;
     };
 
@@ -211,8 +213,9 @@ param:
 
 // Grammar from skeleton said 'code' and 'functionCode'. functionCode forces a 'retour' at the end
 // or allows instructions then return? Skeleton: functionCode: OB (instruction (SEMICOLON |
-// NEWLINE))* retour CB; This enforces last statement is return.
-functionCode: (instruction | SEMICOLON | NEWLINE)* retour;
+// NEWLINE))* retour CB; This enforces last statement is return. functionCode: (instruction |
+// SEMICOLON | NEWLINE)* retour;
+functionCode: code;
 
 retour:
 	RET e = expr {
@@ -236,6 +239,7 @@ instruction:
 	| boucle
 	| bloc
 	| e1 = arithmexpr
+	| retour
 	| 'Afficher' e = expr;
 
 cond_or_bool
@@ -355,6 +359,12 @@ arithmexpr
              System.err.println("Undefined variable: " + $id.getText());
              $t = VarType.INT; // fallback
          }
+    }
+	| r = RATIONNEL {
+         String[] parts = $r.getText().split("/");
+         emit("PUSHI " + parts[0]);
+         emit("PUSHI " + parts[1]);
+         $t = VarType.RATIONNEL;
     }
 	| e1 = arithmexpr RAT e2 = arithmexpr {
         if ($e1.t != VarType.INT || $e2.t != VarType.INT) {
