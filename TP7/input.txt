@@ -1,0 +1,10 @@
+entier x;
+x = 0;
+
+true ? x = 1 : x = 2;
+Afficher(x);
+
+false ? x = 3 : x = 4;
+Afficher(x);
+
+true ? { x = 10; Afficher(x); } : { x = 20; Afficher(x); };
