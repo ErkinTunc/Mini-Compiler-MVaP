@@ -24,9 +24,41 @@ grammar Expr_Calculette;
         Boolean bvalue;
     }
 
-    Map<String, VarEntry> symtab = new HashMap<>(); // symtab : symbole table
+    Map<String, VarEntry> symtab = new HashMap<>();
+    Deque<Map<String, VarEntry>> symtabStack = new ArrayDeque<>(); // Stack for symbol tables
 
-    Scanner scanner = new Scanner(System.in); // Permet de lire des entrées pour l'instruction lire
+    static Scanner in = new Scanner(System.in);
+
+    // Deep copy: VarEntry'leri de kopyalıyoruz
+    Map<String, VarEntry> cloneSymtab(Map<String, VarEntry> src) {
+        Map<String, VarEntry> copy = new HashMap<>();  // "copy" -> nouvelle table des symboles (table copiee)
+        for (Map.Entry<String, VarEntry> e : src.entrySet()) {
+            VarEntry v = e.getValue();
+            VarEntry nv = new VarEntry();   // On creé un nouvelle objet VarEntry
+            nv.type = v.type;               // On affecte les valuers et types
+            nv.initialized = v.initialized;
+            nv.ivalue = v.ivalue;
+            nv.bvalue = v.bvalue;
+            copy.put(e.getKey(), nv);
+        }
+        return copy;
+    }
+
+    // Next token ID ise ve bool değişken ise true
+    boolean isBoolVarToken() {
+        org.antlr.v4.runtime.Token t = _input.LT(1);
+        if (t.getType() != ID) return false;      //Le prochain token n'est pas un ID
+        VarEntry v = symtab.get(t.getText());
+        return v != null && "bool".equals(v.type); // Le type de la variable est bool
+    }
+
+    // Next token ID ise ve int değişken ise true
+    boolean isIntVarToken() {
+        org.antlr.v4.runtime.Token t = _input.LT(1);
+        if (t.getType() != ID) return false;     //Le prochain token n'est pas un ID
+        VarEntry v = symtab.get(t.getText());
+        return v != null && "int".equals(v.type); // Le type de la variable est int
+    }
 }
 
 // ---------------- Parser rules ----------------
@@ -53,13 +85,8 @@ instruction
 declInstr
     : t=type ids=idList
       {
-        for (String name : $ids.value)
-        {
-            if (symtab.containsKey(name))
-            {
-                throw new RuntimeException("Variable already declared: " + name);
-            }
-
+        for (String name : $ids.value) {
+            // Shadowing'e izin veriyoruz: aynı isim varsa bile üzerine yazarız
             VarEntry e = new VarEntry();
             e.type = $t.value;
             e.initialized = false;
@@ -201,39 +228,16 @@ arithmExpr returns [int value]
                                                   $value = $A1.value - $A2.value;
                                                 } 
                                               }   // addSub 
-    | LIRE
-      {
-          try
-          {
-              $value = scanner.nextInt();
-          } 
-          catch (Exception ex)
-          {
-              throw new RuntimeException("Expected int from lire()");
-          }
-      }
-
-    | id=ID
-      {
-        String name = $id.getText();
-        VarEntry v = symtab.get(name);
-        if (v == null) {
-            throw new RuntimeException("Undeclared variable: " + name);
-        }
-        if (!v.initialized) {
-            throw new RuntimeException("Uninitialized variable: " + name);
-        }
-        if (!"int".equals(v.type)) {
-            throw new RuntimeException("Type error: " + name + " is not int");
-        }
-        $value = v.ivalue;
-      }
-    | ENTIER { $value = Integer.parseInt($ENTIER.getText()); }  // intLiteral
     ;
 
 // Boolean expressions "arithm  >  comparaisons >  not >  and  >  or" 
 boolExpr returns [boolean value]
-    :'not' e=boolExpr              { $value = ! $e.value; }
+    : 'lire' '(' ')'
+      {
+        System.out.print("Entrez un booléen (true/false) : ");
+        $value = in.nextBoolean();
+      }
+    | 'not' e=boolExpr              { $value = ! $e.value; }
     | '(' e=boolExpr ')'            { $value =  $e.value; }
     | e1=boolExpr 'and' e2=boolExpr { $value =  $e1.value && $e2.value; }
     | e1=boolExpr 'or'  e2=boolExpr { $value =  $e1.value || $e2.value; }
@@ -248,15 +252,7 @@ boolExpr returns [boolean value]
             default:   $value = false; // should not happen
         }
       }
-    | LIRE
-      {
-          try {
-              $value = scanner.nextBoolean();
-          } catch (Exception ex) {
-              throw new RuntimeException("Expected bool from lire()");
-          }
-      }
-    | id=ID
+     | {isBoolVarToken()}? id=ID   // fonction isBoolVarToken -> si token est ID et variable de type bool
       {
         String name = $id.getText();
         VarEntry v = symtab.get(name);
@@ -271,8 +267,6 @@ boolExpr returns [boolean value]
     | 'true'                        { $value =  true; }
     | 'false'                       { $value =  false; }
     ;
-
-LIRE : 'lire' ;
 
 // ---------------- Lexer rules ----------------
 NEWLINE : '\r'? '\n';       // match newlines
@@ -290,5 +284,4 @@ ID : [a-zA-Z_] [a-zA-Z0-9_]* ;// match identifiers
 
 WS : (' '|'\t')+ -> skip;   // ignore spaces and tabs
 UNMATCH : . -> skip;        // ignore any other character
-
 
