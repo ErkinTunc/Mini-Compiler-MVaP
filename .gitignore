@@ -1,31 +1,98 @@
-# ANTLR-generated sources
-*.tokens
-*.interp
-*.g4.log
-*.g4.lexer
-*.g4.parser
+#################################################
+# ================= BUILD =======================
+#################################################
 
-# Output directories used by tutorials or defaults
-gen/
-generated/
-out/
+# General build directories
+/build/
+/dist/
+/out/
+/target/
 
-# Java targets (kullanıyorsan)
-target/
+# Temporary compilation folders
+/bin/
+/tmp/
+
+#################################################
+# ================= JAVA ========================
+#################################################
+
+# Compiled classes
 *.class
 
-# NodeJS için ANTLR kullanıyorsan
-node_modules/
+# Packaged archives
+*.jar
+*.war
+*.ear
 
-# Python için ANTLR kullanıyorsan
-__pycache__/
-*.pyc
+#################################################
+# =============== ANTLR ========================
+#################################################
 
-# VSCode settings
+# Generated parser/lexer files
+*.tokens
+*.interp
+*.listener.java
+*.visitor.java
+*Lexer.java
+*Parser.java
+*BaseListener.java
+*BaseVisitor.java
+
+# Keep manually written Java sources if any
+!src/**/*.java
+
+#################################################
+# =============== MVaP =========================
+#################################################
+
+# Generated machine code
+*.mvap
+*.cbap
+
+#################################################
+# =============== LOGS =========================
+#################################################
+
+*.log
+*.out
+*.err
+
+#################################################
+# =============== OS FILES =====================
+#################################################
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+#################################################
+# =============== IDE ==========================
+#################################################
+
+# IntelliJ
+.idea/
+*.iml
+
+# VS Code
 .vscode/
 
-# OS garbage
-.DS_Store
+# Eclipse
+.project
+.classpath
+.settings/
 
-# ANTLR4 java files 
-*.java
+#################################################
+# =============== SHELL / TEMP =================
+#################################################
+
+*~
+*.swp
+*.swo
+*.tmp
+
+#################################################
+# =============== TEST OUTPUT ==================
+#################################################
+
+coverage/
+reports/
