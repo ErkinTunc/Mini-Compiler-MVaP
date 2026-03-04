@@ -1,4 +1,4 @@
-# # Mini Compiler (ANTLR4 → MVaP)
+# Mini Compiler (ANTLR4 → MVaP)
 
 ## Project Overview
 
