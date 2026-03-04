@@ -1,4 +1,4 @@
-# Compiler Construction
+# # Mini Compiler (ANTLR4 → MVaP)
 
 ## Project Overview
 
